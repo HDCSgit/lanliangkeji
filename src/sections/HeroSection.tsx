@@ -109,7 +109,11 @@ const HeroSection: React.FC = () => {
   };
 
   if (banners.length === 0) {
-    return null;
+    return (
+      <section className="relative min-h-screen flex items-center justify-center bg-ocean-deep">
+        <div className="text-white/50 text-lg">加载中...</div>
+      </section>
+    );
   }
 
   const stats = DataStore.getStats();

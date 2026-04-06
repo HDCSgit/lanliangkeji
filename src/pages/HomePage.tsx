@@ -23,10 +23,14 @@ const HomePage: React.FC = () => {
     ScrollTrigger.refresh();
 
     return () => {
-      // Only kill triggers specific to this page
+      // Only kill triggers specific to this page (inside <main> element)
       ScrollTrigger.getAll().forEach((trigger) => {
-        if (trigger.vars.trigger && (trigger.vars.trigger as Element).closest('main')) {
-          trigger.kill();
+        const triggerElement = trigger.vars.trigger;
+        // Only process if trigger is a valid DOM Element (not window/document)
+        if (triggerElement && triggerElement instanceof Element) {
+          if (triggerElement.closest('main')) {
+            trigger.kill();
+          }
         }
       });
     };
