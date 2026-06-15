@@ -32,8 +32,8 @@ aiofiles==24.1.0
 
 # HTTP 客户端 / 请求
 httpx==0.27.2
-requests==2.32.3
-urllib3==2.2.3
+requests>=2.32.0
+urllib3>=2.2.0
 
 # 支付宝
 python-alipay-sdk==3.4.0
