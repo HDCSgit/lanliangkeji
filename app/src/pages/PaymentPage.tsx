@@ -24,6 +24,7 @@ const PaymentPage: React.FC = () => {
   const [countdown, setCountdown] = useState(1800);
   const [error, setError] = useState('');
   const [polling, setPolling] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [receivableAccount, setReceivableAccount] = useState<ReceivableAccount | null>(null);
 
@@ -119,25 +120,44 @@ const PaymentPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [step, uploadCountdown]);
 
-  // 轮询支付状态（微信/支付宝用）
+  // 轮询支付状态(微信/支付宝用)
   const startPolling = useCallback((pn: string) => {
     setPolling(true);
-    const interval = setInterval(async () => {
+    // 先清理可能残留的 timer (用户重复点击确认支付场景)
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollTimerRef.current = setInterval(async () => {
       const status = await PaymentAPI.queryPaymentStatus(pn);
       if (status === 'paid') {
-        clearInterval(interval);
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
         setPolling(false);
         setResult('success');
         setStep('result');
       } else if (status === 'expired' || status === 'failed') {
-        clearInterval(interval);
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
         setPolling(false);
         setResult(status);
         setStep('result');
       }
     }, 3000);
+  }, []);
 
-    return () => clearInterval(interval);
+  // 组件卸载时清理轮询 timer (避免离开页面后还在 3s 调一次后端)
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
   }, []);
 
   // 创建支付
@@ -420,6 +440,18 @@ const PaymentPage: React.FC = () => {
                       //      会 pop 当前 history, 用户回到 #/checkout "选择支付方式" 页。
                       //      用中转页后, 前端 history 干净, 支付宝完成支付 return_url 跳后端 HTML
                       //      3 秒后再 meta refresh 跳回前端 /#/order/{id}, 衔接稳定。
+                      // 重要: 必须用后端中转页 /api/v1/payments/alipay/launch/{payment_no}
+                      //      让后端渲染 form POST 跳支付宝。
+                      // 原因: 前端直接 form.submit(), 部分手机浏览器在支付宝 App 接管 URL 时
+                      //      会 pop 当前 history, 用户回到 #/checkout "选择支付方式" 页。
+                      //      用中转页后, 前端 history 干净, 支付宝完成支付 return_url 跳后端 HTML
+                      //      3 秒后再 meta refresh 跳回前端 /#/order/{id}, 衔接稳定。
+                      // 跳走前清掉 polling,避免在支付宝里还在每 3s 查后端
+                      if (pollTimerRef.current) {
+                        clearInterval(pollTimerRef.current);
+                        pollTimerRef.current = null;
+                        setPolling(false);
+                      }
                       const launchUrl = `/api/v1/payments/alipay/launch/${paymentNo}`;
                       window.location.href = launchUrl;
                     }}

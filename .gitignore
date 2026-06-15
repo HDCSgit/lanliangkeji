@@ -63,7 +63,8 @@ server_*.log
 app_*.err
 app_*.log
 vite_*.err
-sf_*.py
+# 根目录调试脚本 (不要误伤 server/app/services/sf_express_service.py)
+/sf_*.py
 
 # 根目录调试残留图片
 __*.png

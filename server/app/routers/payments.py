@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.constants import OrderStatus, PaymentMethod, PaymentStatus, VoucherStatus, BillStatus, BillType
+from app.core.constants import OrderStatus, PaymentMethod, PaymentStatus, VoucherStatus, BillStatus, BillType, UserRole
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user, require_sysadmin
 from app.models.models import (
@@ -147,11 +147,11 @@ def _mark_paid_and_settle(db: Session, payment: PaymentOrder) -> None:
         user_id=order.user_id,
         order_id=order.id,
         order_no=order.order_no,
-        type="expense",
+        type=BillType.EXPENSE,
         amount=payment.amount,
         payment_method=payment.payment_method,
         description=f"订单 {order.order_no} 支付成功",
-        status="success",
+        status=BillStatus.SUCCESS,
     )
     db.add(bill)
     db.commit()
@@ -271,10 +271,17 @@ async def alipay_return(
 
 @router.post("/alipay/query", response_model=ApiResponse)
 def alipay_query(
-    out_trade_no: str,
+    payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    主动查询支付宝订单(给前端轮询 / 重新确认结果用)。
+    body: { out_trade_no: string }
+    """
+    out_trade_no = payload.get("out_trade_no") if isinstance(payload, dict) else None
+    if not out_trade_no:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="缺少 out_trade_no")
     """
     主动查询支付宝订单(给前端轮询 / 重新确认结果用)。
     """
