@@ -1,0 +1,197 @@
+# ============ Python 后端 ============
+# 虚拟环境
+server/venv/
+server/.venv/
+server/env/
+server/__pycache__/
+server/**/__pycache__/
+server/**/.pytest_cache/
+server/.mypy_cache/
+server/.ruff_cache/
+*.pyc
+*.pyo
+*.pyd
+
+# 数据库
+server/*.db
+server/*.sqlite
+server/*.sqlite3
+
+# 临时上传 / 日志
+server/uploads/
+*.log
+
+# 敏感配置
+server/.env
+server/.env.local
+server/.env.*.local
+
+# ============ 前端 ============
+app/node_modules/
+app/dist/
+app/dist-ssr/
+app/.vite/
+app/*.local
+
+# ============ 临时调试 / 提取脚本(根目录) ============
+# 这些是开发期临时文件,不是项目代码
+analyze_*.py
+analyze_*.txt
+analyze_output.txt
+extract_*.py
+extract_*.txt
+extract_*.json
+find_*.py
+find_*.txt
+parse_*.py
+parse_*.txt
+save_*.py
+save_*.txt
+format_*.py
+format_*.txt
+check_*.py
+check_*.txt
+__check*.cjs
+__check*.js
+__nav_*.png
+__debug*.png
+__screenshot*.png
+__rollback*.cjs
+__y_check.cjs
+server_*.err
+server_*.log
+app_*.err
+app_*.log
+vite_*.err
+sf_*.py
+
+# 根目录调试残留图片
+__*.png
+__nav_y*.png
+__rollback*.png
+__debug*.png
+__screenshot*.png
+
+# 前端 .env(可能含 VITE_ 变量)
+app/.env
+app/.env.local
+app/.env.*.local
+
+# 根目录的 .env 残留(项目用的是 server/.env)
+.env
+.env.local
+
+# 绝对不能上传的密钥 (服务器 .env 已经覆盖,这里是裸 PEM 备份残留)
+private_key.pem
+public_key.pem
+*.pem
+
+# 调试残留: 根目录的提取/分析脚本产物
+chinese_strings.txt
+extracted_arrays.txt
+raw_data_arrays.txt
+navigation.json
+routes.txt
+
+# 构建产物 (Vite build 输出)
+assets/
+app/dist/
+
+# 项目自带的测试图片(不是资源)
+test_voucher.png
+
+# 临时拼装的 _full / _raw / _formatted / _section / _summary 数据快照
+*_full.txt
+*_full2.txt
+*_full3.txt
+*_raw.txt
+*_formatted.txt
+*_section.txt
+*_summary*.txt
+*_summary*.json
+data_*.txt
+data_*.json
+data_*.csv
+array_*.txt
+context*.txt
+big_*.txt
+admin_*.txt
+bills_*.txt
+cart_*.txt
+checkout_*.txt
+config_*.txt
+lt_*.txt
+*_page.txt
+*_orders.txt
+*_products.txt
+*_declaration.txt
+*_service.txt
+*_auth.txt
+*_config.txt
+*_config_*.txt
+*_config_default.txt
+user_*.txt
+payment_*.txt
+product_*.txt
+order_*.txt
+site_*.txt
+transfer_*.txt
+site_*.json
+*Ae.json
+*B2.json
+*C2.json
+*E2.json
+*i4.json
+*k2.json
+*M2.json
+*N2.json
+*O2.json
+*P2.json
+*R2.json
+*S2.json
+*T2.json
+*z2.json
+*D2.json
+*da_*.txt
+*ge_*.txt
+*Iv_*.txt
+*lt_*.txt
+*Qc_*.txt
+*Rc_*.txt
+*Ri_*.txt
+*wn_*.txt
+*xx_*.txt
+*da_*.txt
+*ge_*.txt
+*Iv_*.txt
+
+# 根目录的 index.html(调试残留)
+# 项目实际入口是 app/index.html,根目录这份是临时分析文件
+/index.html
+
+# ============ 编辑器 / OS ============
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.tmp
+*.bak
+
+# ============ mavis 自身 ============
+.mavis/
+.harness/
+
+# ============ node 工具缓存 ============
+app/.npm/
+app/.next/
+app/.nuxt/
+app/.cache/
+app/coverage/
+
+# ============ 后端测试 / 临时 ============
+server/tests/__pycache__/
+server/tests/.pytest_cache/
