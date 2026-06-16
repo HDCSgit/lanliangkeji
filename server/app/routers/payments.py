@@ -392,16 +392,34 @@ def get_payment_status(
 
 @router.get("/methods", response_model=ApiResponse)
 def get_payment_methods(db: Session = Depends(get_db)):
-    config = db.query(PaymentGatewayConfig).first()
-    if not config:
-        return ApiResponse(success=True, data=[], message="暂无支付方式配置")
+    """用户支付页用的支付方式列表
+
+    双重开关:只有当 .env 真值启用 AND DB 前端展示开关启用 时,该支付方式才对用户可见
+    """
+    from app.core.config import settings
+
+    cfg = db.query(PaymentGatewayConfig).first()
+    wechat_db = (cfg.wechat_pay if cfg and cfg.wechat_pay else {}) or {}
+    alipay_db = (cfg.alipay if cfg and cfg.alipay else {}) or {}
+    bank_db = (cfg.bank_transfer if cfg and cfg.bank_transfer else {}) or {}
+
+    # .env 真值(后端真实启用状态)
+    env_wechat_enabled = bool(getattr(settings, "WECHAT_ENABLED", False))
+    env_alipay_enabled = bool(getattr(settings, "ALIPAY_ENABLED", False))
+    env_bank_enabled = bool(getattr(settings, "BANK_TRANSFER_ENABLED", True))
+
+    # DB 前端展示开关(管理员在后台设的"是否对用户显示")
+    wechat_display = bool(wechat_db.get("frontend_enabled", True))
+    alipay_display = bool(alipay_db.get("frontend_enabled", True))
+    bank_display = bool(bank_db.get("enabled", True))
 
     methods = []
-    if config.wechat_pay.get("enabled"):
+    # 同时满足 env 启用 + 前端展示,才暴露给用户
+    if env_wechat_enabled and wechat_display:
         methods.append({"method": "wechat", "name": "微信支付", "enabled": True})
-    if config.alipay.get("enabled"):
+    if env_alipay_enabled and alipay_display:
         methods.append({"method": "alipay", "name": "支付宝", "enabled": True})
-    if config.bank_transfer.get("enabled"):
+    if env_bank_enabled and bank_display:
         methods.append({"method": "bank_transfer", "name": "对公转账", "enabled": True})
 
     return ApiResponse(success=True, data=methods)

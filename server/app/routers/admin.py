@@ -686,64 +686,122 @@ def get_payment_gateway_config(
     _user: User = Depends(require_auditor_or_admin),
     db: Session = Depends(get_db),
 ):
-    """后台:获取支付配置状态(脱敏)
+    """后台:获取支付配置状态(脱敏 + 双重开关)
 
     返回字段:
-      - enabled: 启用开关(来自 DB,可远程控制)
-      - app_id: 脱敏后的 app_id(只读 .env,前端可见)
+      - enabled: 后端真实启用状态(来自 .env,只读)
+      - frontend_enabled: 前端展示开关(来自 DB,可后台切换)
+      - app_id / mch_id: 脱敏后的 ID
       - private_key / api_key / public_key: '已配置'/'未配置'(不返回真值)
-      - notify_url: 回调地址(可在 DB 覆盖 .env)
+      - notify_url: 回调地址
     """
+    from app.core.config import settings
+
     cfg = db.query(PaymentGatewayConfig).first()
 
-    # 读 .env 真实值(只在这里读一次,绝不返回前端)
-    try:
-        from app.core.config import settings
-        alipay_app_id = settings.ALIPAY_APP_ID or ""
-        alipay_private_key = settings.ALIPAY_APP_PRIVATE_KEY or ""
-        alipay_public_key = settings.ALIPAY_ALIPAY_PUBLIC_KEY or ""
-        alipay_notify_url = settings.ALIPAY_NOTIFY_URL or ""
-    except Exception:
-        alipay_app_id = alipay_private_key = alipay_public_key = alipay_notify_url = ""
+    # 读 .env 真实值(后端真值)
+    alipay_app_id = getattr(settings, "ALIPAY_APP_ID", "") or ""
+    alipay_private_key = getattr(settings, "ALIPAY_APP_PRIVATE_KEY", "") or ""
+    alipay_public_key = getattr(settings, "ALIPAY_ALIPAY_PUBLIC_KEY", "") or ""
+    alipay_notify_url = getattr(settings, "ALIPAY_NOTIFY_URL", "") or ""
+    env_alipay_enabled = bool(getattr(settings, "ALIPAY_ENABLED", False))
+    env_wechat_enabled = bool(getattr(settings, "WECHAT_ENABLED", False))
+    env_bank_enabled = bool(getattr(settings, "BANK_TRANSFER_ENABLED", True))
 
-    # 读 DB 的开关 + 回调 URL(可被管理员覆盖)
-    if cfg and cfg.alipay:
-        alipay_enabled = cfg.alipay.get("enabled", False)
-        alipay_notify_url_db = cfg.alipay.get("notify_url", "") or ""
-        final_notify_url = alipay_notify_url_db or alipay_notify_url
-    else:
-        alipay_enabled = False
-        final_notify_url = alipay_notify_url
+    # 读 DB
+    wechat_db = (cfg.wechat_pay if cfg and cfg.wechat_pay else {}) or {}
+    alipay_db = (cfg.alipay if cfg and cfg.alipay else {}) or {}
+    bank_db = (cfg.bank_transfer if cfg and cfg.bank_transfer else {}) or {}
+
+    alipay_notify_url_db = alipay_db.get("notify_url", "") or ""
+    final_alipay_notify_url = alipay_notify_url_db or alipay_notify_url
 
     return ApiResponse(success=True, data={
         "wechat_pay": {
-            "enabled": (cfg.wechat_pay.get("enabled", False) if cfg and cfg.wechat_pay else False),
-            "mch_id": _mask(""),  # 微信支付未配 env,这里给空即可
+            "enabled": env_wechat_enabled,  # 来自 .env,后端真值
+            "frontend_enabled": bool(wechat_db.get("frontend_enabled", True)),  # DB,可改
+            "mch_id": _mask(""),
             "app_id": _mask(""),
             "api_key": _status_for_secret(""),
-            "notify_url": (cfg.wechat_pay.get("notify_url", "") if cfg and cfg.wechat_pay else ""),
+            "notify_url": wechat_db.get("notify_url", "") or "",
         },
         "alipay": {
-            "enabled": alipay_enabled,
+            "enabled": env_alipay_enabled,
+            "frontend_enabled": bool(alipay_db.get("frontend_enabled", True)),
             "app_id": _mask(alipay_app_id),
             "private_key": _status_for_secret(alipay_private_key),
             "public_key": _status_for_secret(alipay_public_key),
-            "notify_url": final_notify_url,
+            "notify_url": final_alipay_notify_url,
         },
         "bank_transfer": {
-            "enabled": (cfg.bank_transfer.get("enabled", True) if cfg and cfg.bank_transfer else True),
-            "account_name": (cfg.bank_transfer.get("account_name", "福州蓝粮海洋生物科技有限公司") if cfg and cfg.bank_transfer else "福州蓝粮海洋生物科技有限公司"),
-            "bank_name": (cfg.bank_transfer.get("bank_name", "中国工商银行福州马尾支行") if cfg and cfg.bank_transfer else "中国工商银行福州马尾支行"),
-            "account_number": (cfg.bank_transfer.get("account_number", "") if cfg and cfg.bank_transfer else ""),
+            "enabled": env_bank_enabled,
+            "frontend_enabled": bool(bank_db.get("enabled", True)),
+            "account_name": bank_db.get("account_name", "福州蓝粮海洋生物科技有限公司"),
+            "bank_name": bank_db.get("bank_name", "中国工商银行福州马尾支行"),
+            "account_number": bank_db.get("account_number", ""),
         },
     })
 
 
 # ⚠️ 安全设计:
 # - 支付密钥(私钥/API Key) 永远只在 .env,前端拿不到真值
-# - 支付宝/微信启用开关 在 .env (改 env + 重启生效),前端显示但不能改
+# - 支付宝/微信真实启用状态 在 .env (改 env + 重启生效),前端显示但不能改
+# - 前端展示开关(frontend_enabled) 在 DB,可后台切换,只控制支付页是否展示
 # - 对公转账账户信息(开户名/开户行/账号) 在 DB 可改(运营场景,不算敏感)
-#   且前端页面允许编辑保存
+
+
+class _FrontendToggle(BaseModel):
+    frontend_enabled: bool
+
+
+@router.put("/payment-gateway/alipay-frontend-toggle", response_model=ApiResponse)
+def toggle_alipay_frontend(
+    body: _FrontendToggle,
+    _user: User = Depends(require_auditor_or_admin),
+    db: Session = Depends(get_db),
+):
+    """后台:切换支付宝前端展示开关(仅前端展示,不影响 .env 真值)"""
+    cfg = db.query(PaymentGatewayConfig).first()
+    alipay_cfg = (cfg.alipay if cfg and cfg.alipay else {}) or {}
+    alipay_cfg["frontend_enabled"] = body.frontend_enabled
+    if not cfg:
+        cfg = PaymentGatewayConfig(
+            wechat_pay={"enabled": False, "frontend_enabled": True, "mch_id": "", "app_id": "", "api_key": "", "notify_url": ""},
+            alipay=alipay_cfg,
+            bank_transfer={"enabled": True, "account_name": "福州蓝粮海洋生物科技有限公司", "bank_name": "中国工商银行福州马尾支行", "account_number": ""},
+            updated_by=_user.id,
+        )
+        db.add(cfg)
+    else:
+        cfg.alipay = alipay_cfg
+        cfg.updated_by = _user.id
+    db.commit()
+    return ApiResponse(success=True, message=f"支付宝前端展示已{'启用' if body.frontend_enabled else '隐藏'}")
+
+
+@router.put("/payment-gateway/wechat-frontend-toggle", response_model=ApiResponse)
+def toggle_wechat_frontend(
+    body: _FrontendToggle,
+    _user: User = Depends(require_auditor_or_admin),
+    db: Session = Depends(get_db),
+):
+    """后台:切换微信支付前端展示开关(仅前端展示,不影响 .env 真值)"""
+    cfg = db.query(PaymentGatewayConfig).first()
+    wechat_cfg = (cfg.wechat_pay if cfg and cfg.wechat_pay else {}) or {}
+    wechat_cfg["frontend_enabled"] = body.frontend_enabled
+    if not cfg:
+        cfg = PaymentGatewayConfig(
+            wechat_pay=wechat_cfg,
+            alipay={"enabled": False, "frontend_enabled": True, "app_id": "", "private_key": "", "public_key": "", "notify_url": ""},
+            bank_transfer={"enabled": True, "account_name": "福州蓝粮海洋生物科技有限公司", "bank_name": "中国工商银行福州马尾支行", "account_number": ""},
+            updated_by=_user.id,
+        )
+        db.add(cfg)
+    else:
+        cfg.wechat_pay = wechat_cfg
+        cfg.updated_by = _user.id
+    db.commit()
+    return ApiResponse(success=True, message=f"微信支付前端展示已{'启用' if body.frontend_enabled else '隐藏'}")
 
 @router.put("/payment-gateway/bank-transfer", response_model=ApiResponse)
 def update_bank_transfer(

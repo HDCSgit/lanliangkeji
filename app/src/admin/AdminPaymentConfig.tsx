@@ -8,6 +8,7 @@ import { UserStore } from '@/data/userStore';
 
 interface BankTransferInfo {
   enabled: boolean;
+  frontend_enabled: boolean;
   account_name: string;
   bank_name: string;
   account_number: string;
@@ -15,6 +16,7 @@ interface BankTransferInfo {
 
 interface AlipayInfo {
   enabled: boolean;
+  frontend_enabled: boolean;
   app_id: string;
   private_key: string;  // '已配置' / '未配置' (不返回真值)
   public_key: string;
@@ -22,7 +24,8 @@ interface AlipayInfo {
 }
 
 interface WechatInfo {
-  enabled: boolean;
+  enabled: boolean;          // 后端 .env 真值(只读)
+  frontend_enabled: boolean; // 前端展示开关(可改)
   mch_id: string;
   app_id: string;
   api_key: string;  // '已配置' / '未配置'
@@ -72,16 +75,49 @@ const AdminPaymentConfig: React.FC = () => {
     setError('');
     try {
       await apiPut('/admin/payment-gateway/bank-transfer', {
-        enabled: bankForm.enabled,
+        enabled: bankForm.frontend_enabled,
         account_name: bankForm.account_name,
         bank_name: bankForm.bank_name,
         account_number: bankForm.account_number,
       });
-      setSaveMessage('对公转账账户已保存');
-      await loadConfig();  // 重新拉数据
+      setSaveMessage('对公转账已保存');
+      await loadConfig();
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (e: any) {
       setError(e?.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 切换支付宝前端展示开关(仅前端显示控制)
+  const handleToggleAlipayFrontend = async (next: boolean) => {
+    if (!config) return;
+    setSaving(true);
+    setError('');
+    try {
+      await apiPut('/admin/payment-gateway/alipay-frontend-toggle', { frontend_enabled: next });
+      await loadConfig();
+      setSaveMessage(next ? '支付宝前端展示已启用' : '支付宝前端展示已隐藏');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (e: any) {
+      setError(e?.message || '切换失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleWechatFrontend = async (next: boolean) => {
+    if (!config) return;
+    setSaving(true);
+    setError('');
+    try {
+      await apiPut('/admin/payment-gateway/wechat-frontend-toggle', { frontend_enabled: next });
+      await loadConfig();
+      setSaveMessage(next ? '微信支付前端展示已启用' : '微信支付前端展示已隐藏');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (e: any) {
+      setError(e?.message || '切换失败');
     } finally {
       setSaving(false);
     }
@@ -172,26 +208,54 @@ const AdminPaymentConfig: React.FC = () => {
                 <h2 className="font-bold text-ocean-deep">微信支付</h2>
                 <p className="text-sm text-gray-500">
                   <Lock className="inline w-3 h-3 mr-1" />
-                  密钥和启用开关由 .env 控制,部署时修改 server/.env + 重启生效
+                  密钥和后端启用开关在 .env,前端展示开关可在下面控制
                 </p>
               </div>
             </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              config.wechat_pay.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-            }`}>
-              {config.wechat_pay.enabled ? '✓ 已启用' : '✗ 未启用'}
-            </span>
+            <div className="flex flex-col items-end gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                config.wechat_pay.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                后端(.env):{config.wechat_pay.enabled ? '✓ 已启用' : '✗ 未启用'}
+              </span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.wechat_pay.frontend_enabled}
+                  disabled={!config.wechat_pay.enabled || saving}
+                  onChange={(e) => handleToggleWechatFrontend(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
+                />
+                <span className="text-sm">前端展示</span>
+              </label>
+            </div>
           </div>
+
+          {!config.wechat_pay.enabled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              ⚠️ 后端 .env 中 <code className="bg-white px-1 rounded">WECHAT_ENABLED</code> 未启用。
+              启用前无法在前端展示,即使勾选"前端展示"也无效果。
+              请运维编辑 <code className="bg-white px-1 rounded">server/.env</code>:
+              <br />
+              <code className="bg-white px-1 rounded">WECHAT_ENABLED=true</code>
+              然后重启后端服务。
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <Field label="商户号 (mch_id)" value={config.wechat_pay.mch_id || '未配置'} />
             <Field label="应用ID (app_id)" value={config.wechat_pay.app_id || '未配置'} />
             <Field label="API 密钥" value={config.wechat_pay.api_key || '未配置'} />
             <Field label="回调地址 (notify_url)" value={config.wechat_pay.notify_url || '未配置'} />
           </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+            💡 密钥等敏感信息仅存储在 <code className="bg-white px-1 rounded">server/.env</code>(不在数据库),此处仅显示是否已配置。
+            真实密钥请直接编辑 env 文件。
+          </div>
         </div>
       )}
 
-      {/* Alipay - 只读,显示 .env 配置状态 */}
+      {/* Alipay */}
       {activeTab === 'alipay' && (
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-6">
           <div className="flex items-center justify-between">
@@ -203,31 +267,54 @@ const AdminPaymentConfig: React.FC = () => {
                 <h2 className="font-bold text-ocean-deep">支付宝</h2>
                 <p className="text-sm text-gray-500">
                   <Lock className="inline w-3 h-3 mr-1" />
-                  密钥和启用开关由 .env 控制,部署时修改 server/.env + 重启生效
+                  密钥和后端启用开关在 .env,前端展示开关可在下面控制
                 </p>
               </div>
             </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              config.alipay.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-            }`}>
-              {config.alipay.enabled ? '✓ 已启用' : '✗ 未启用'}
-            </span>
+            <div className="flex flex-col items-end gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                config.alipay.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                后端(.env):{config.alipay.enabled ? '✓ 已启用' : '✗ 未启用'}
+              </span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.alipay.frontend_enabled}
+                  disabled={!config.alipay.enabled || saving}
+                  onChange={(e) => handleToggleAlipayFrontend(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
+                />
+                <span className="text-sm">前端展示</span>
+              </label>
+            </div>
           </div>
+
+          {!config.alipay.enabled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              ⚠️ 后端 .env 中 <code className="bg-white px-1 rounded">ALIPAY_ENABLED</code> 未启用。
+              启用前无法在前端展示,即使勾选"前端展示"也无效果。
+              请运维编辑 <code className="bg-white px-1 rounded">server/.env</code>:
+              <br />
+              <code className="bg-white px-1 rounded">ALIPAY_ENABLED=true</code>
+              然后重启后端服务。
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <Field label="应用ID (app_id)" value={config.alipay.app_id || '未配置'} />
             <Field label="应用私钥" value={config.alipay.private_key || '未配置'} mono />
             <Field label="支付宝公钥" value={config.alipay.public_key || '未配置'} mono />
             <Field label="回调地址 (notify_url)" value={config.alipay.notify_url || '未配置'} />
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-            💡 修改密钥请编辑 <code className="bg-white px-1 rounded">server/.env</code>:
-            <br />
-            <code className="bg-white px-1 rounded">ALIPAY_ENABLED=true</code> · <code className="bg-white px-1 rounded">ALIPAY_APP_ID</code> · <code className="bg-white px-1 rounded">ALIPAY_APP_PRIVATE_KEY</code> · <code className="bg-white px-1 rounded">ALIPAY_ALIPAY_PUBLIC_KEY</code>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+            💡 密钥等敏感信息仅存储在 <code className="bg-white px-1 rounded">server/.env</code>(不在数据库)。
+            真实密钥请直接编辑 env 文件。
           </div>
         </div>
       )}
 
-      {/* Bank Transfer - 可编辑(非敏感,允许后台配置) */}
+      {/* Bank Transfer */}
       {activeTab === 'bank' && bankForm && (
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-6">
           <div className="flex items-center justify-between">
@@ -240,18 +327,35 @@ const AdminPaymentConfig: React.FC = () => {
                 <p className="text-sm text-gray-500">配置收款银行账户信息(可在后台编辑,实时生效)</p>
               </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={bankForm.enabled}
-                onChange={(e) => setBankForm({ ...bankForm, enabled: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue"
-              />
-              <span className="text-sm">启用</span>
-            </label>
+            <div className="flex flex-col items-end gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                bankForm.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                后端(.env):{bankForm.enabled ? '✓ 已启用' : '✗ 未启用'}
+              </span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bankForm.frontend_enabled}
+                  disabled={!bankForm.enabled || saving}
+                  onChange={(e) => setBankForm({ ...bankForm, frontend_enabled: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
+                />
+                <span className="text-sm">前端展示</span>
+              </label>
+            </div>
           </div>
 
-          {bankForm.enabled && (
+          {!bankForm.enabled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              ⚠️ 后端 .env 中 <code className="bg-white px-1 rounded">BANK_TRANSFER_ENABLED</code> 未启用。
+              启用前无法在前端展示。请运维编辑 <code className="bg-white px-1 rounded">server/.env</code>:
+              <br />
+              <code className="bg-white px-1 rounded">BANK_TRANSFER_ENABLED=true</code> 然后重启。
+            </div>
+          )}
+
+          {bankForm.frontend_enabled && bankForm.enabled && (
             <>
               <div className="p-4 bg-orange-50 rounded-xl">
                 <div className="flex items-center gap-2 text-orange-700 mb-2">
@@ -315,11 +419,15 @@ const AdminPaymentConfig: React.FC = () => {
             </>
           )}
 
-          {!bankForm.enabled && (
+          {(!bankForm.enabled || !bankForm.frontend_enabled) && (
             <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">
               <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p>对公转账已禁用</p>
-              <p className="text-sm text-gray-400">启用后可配置收款账户信息</p>
+              <p>{!bankForm.enabled ? '对公转账已禁用' : '对公转账前端展示已关闭'}</p>
+              <p className="text-sm text-gray-400">
+                {!bankForm.enabled
+                  ? '在 .env 中设置 BANK_TRANSFER_ENABLED=true 并重启后端'
+                  : '勾选上方"前端展示"即可让用户在支付页看到对公转账'}
+              </p>
             </div>
           )}
         </div>
