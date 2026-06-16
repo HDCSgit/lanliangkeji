@@ -1044,16 +1044,16 @@ export const DataStore = {
     const data = await apiPost<{
       id: string;
       image: string;
-      cover_images: string[];
-      detail_images: string[];
-      enable_carousel: boolean;
+      coverImages: string[];
+      detailImages: string[];
+      enableCarousel: boolean;
       product: Product;
     }>(`/products/${productId}/image`, formData);
     return {
       path: data.image,
-      coverImages: data.cover_images || [],
-      detailImages: data.detail_images || [],
-      enableCarousel: !!data.enable_carousel,
+      coverImages: data.coverImages || [],
+      detailImages: data.detailImages || [],
+      enableCarousel: !!data.enableCarousel,
       product: data.product,
     };
   },
@@ -1068,15 +1068,15 @@ export const DataStore = {
   ): Promise<{ coverImages: string[]; detailImages: string[]; enableCarousel: boolean; product: Product }> {
     const data = await apiDelete<{
       id: string;
-      cover_images: string[];
-      detail_images: string[];
-      enable_carousel: boolean;
+      coverImages: string[];
+      detailImages: string[];
+      enableCarousel: boolean;
       product: Product;
     }>(`/products/${productId}/image?kind=${kind}&image_url=${encodeURIComponent(imageUrl)}`);
     return {
-      coverImages: data.cover_images || [],
-      detailImages: data.detail_images || [],
-      enableCarousel: !!data.enable_carousel,
+      coverImages: data.coverImages || [],
+      detailImages: data.detailImages || [],
+      enableCarousel: !!data.enableCarousel,
       product: data.product,
     };
   },
@@ -1094,15 +1094,15 @@ export const DataStore = {
     urls.forEach((u) => params.append('urls', u));
     const data = await apiPut<{
       id: string;
-      cover_images: string[];
-      detail_images: string[];
-      enable_carousel: boolean;
+      coverImages: string[];
+      detailImages: string[];
+      enableCarousel: boolean;
       product: Product;
     }>(`/products/${productId}/images/reorder?${params.toString()}`);
     return {
-      coverImages: data.cover_images || [],
-      detailImages: data.detail_images || [],
-      enableCarousel: !!data.enable_carousel,
+      coverImages: data.coverImages || [],
+      detailImages: data.detailImages || [],
+      enableCarousel: !!data.enableCarousel,
       product: data.product,
     };
   },
@@ -1114,10 +1114,10 @@ export const DataStore = {
     productId: string,
     enable: boolean,
   ): Promise<{ enableCarousel: boolean }> {
-    const data = await apiPut<{ id: string; enable_carousel: boolean }>(
+    const data = await apiPut<{ id: string; enableCarousel: boolean }>(
       `/products/${productId}/carousel?enable=${enable ? 'true' : 'false'}`,
     );
-    return { enableCarousel: !!data.enable_carousel };
+    return { enableCarousel: !!data.enableCarousel };
   },
 
   async setNews(news: News[]): Promise<void> {
