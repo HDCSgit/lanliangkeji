@@ -28,6 +28,8 @@ const AdminProducts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  // 当前对话框里的是不是"新建草稿"(用于取消时删除)
+  const [isDraft, setIsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // 基础字段
@@ -49,10 +51,7 @@ const AdminProducts: React.FC = () => {
   const [features, setFeatures] = useState<string[]>([]);
   const [featureInput, setFeatureInput] = useState('');
 
-  // 新建模式下暂存的图片文件(创建产品后会上传到后端)
-  // key 是 formData.coverImages/detailImages 里的 base64 字符串
-  const [pendingCoverFiles, setPendingCoverFiles] = useState<Map<string, File>>(new Map());
-  const [pendingDetailFiles, setPendingDetailFiles] = useState<Map<string, File>>(new Map());
+  // (现在不再需要本地暂存图片:点"添加产品"立即创建草稿,所有上传都用真实 id)
 
   useEffect(() => {
     loadProducts();
@@ -83,6 +82,7 @@ const AdminProducts: React.FC = () => {
 
   const resetForm = () => {
     setEditingProduct(null);
+    setIsDraft(false);
     setFormData({
       name: '',
       category: CATEGORIES[0],
@@ -96,11 +96,10 @@ const AdminProducts: React.FC = () => {
     setSpecs([]);
     setFeatures([]);
     setFeatureInput('');
-    setPendingCoverFiles(new Map());
-    setPendingDetailFiles(new Map());
   };
 
   const openEditDialog = (product: Product) => {
+    setIsDraft(false);
     setEditingProduct(product);
     setFormData({
       name: product.name,
@@ -118,17 +117,43 @@ const AdminProducts: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const openCreateDialog = () => {
-    // eslint-disable-next-line no-console
-    console.log('[AdminProducts] openCreateDialog called, editingProduct=', editingProduct, 'isDialogOpen before=', isDialogOpen);
+  const openCreateDialog = async () => {
+    // 立即在服务端创建一个"草稿"产品(只有 name,其它都空)
+    // 后续所有图片上传 / 规格保存都走真实 id,避免前端暂存逻辑
+    // 用户取消时如果草稿没实质内容,就 DELETE 掉
     try {
-      resetForm();
+      const draft = await DataStore.createProduct({
+        name: '未命名产品',
+        category: CATEGORIES[0],
+        description: '',
+        image: '',
+        cover_images: [],
+        detail_images: [],
+        enable_carousel: false,
+        features: [],
+        is_active: false,  // 草稿默认不上架
+        order: 0,
+        specs: [],
+      } as any);
+      // 拿到的 draft 就是新建草稿,当作 editingProduct
+      setEditingProduct(draft as Product);
+      setFormData({
+        name: '未命名产品',
+        category: CATEGORIES[0],
+        description: '',
+        image: '',
+        isActive: false,
+        coverImages: [],
+        detailImages: [],
+        enableCarousel: false,
+      });
+      setSpecs([]);
+      setFeatures([]);
+      setFeatureInput('');
+      setIsDraft(true);
       setIsDialogOpen(true);
-      // eslint-disable-next-line no-console
-      console.log('[AdminProducts] openCreateDialog setIsDialogOpen(true) done');
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[AdminProducts] openCreateDialog error:', e);
+    } catch (e: any) {
+      alert('创建产品失败: ' + (e?.message || e));
     }
   };
 
@@ -208,100 +233,47 @@ const AdminProducts: React.FC = () => {
   };
 
   // ---- 图片上传 ----
-  // 把 File 读成 base64 数据 URL(用于本地预览 + 暂存)
-  const readFileAsDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
+  // 永远走 editingProduct.id(openCreateDialog 已经创建了草稿,所以一定有 id)
   const handleCoverUpload = async (file: File) => {
-    if (editingProduct) {
-      // 编辑模式:直接走后端接口
-      try {
-        const position = (formData.coverImages?.length ?? 0);
-        const r = await DataStore.uploadProductImage(editingProduct.id, file, 'cover', position);
-        setFormData((prev) => ({
-          ...prev,
-          coverImages: r.coverImages,
-          image: r.coverImages[0] || prev.image,
-          enableCarousel: (prev.enableCarousel ?? false) && r.coverImages.length >= 2 ? prev.enableCarousel : (r.coverImages.length >= 2 ? prev.enableCarousel : false),
-        }));
-        await loadProducts();
-      } catch (e: any) {
-        alert('封面图上传失败: ' + (e?.message || e));
-      }
-      return;
-    }
-    // 新建模式:读成 base64 暂存 + 把 File 存到 pending,创建产品时一起上传
+    if (!editingProduct) return;
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setPendingCoverFiles((prev) => {
-        const next = new Map(prev);
-        next.set(dataUrl, file);
-        return next;
-      });
+      const position = (formData.coverImages?.length ?? 0);
+      const r = await DataStore.uploadProductImage(editingProduct.id, file, 'cover', position);
       setFormData((prev) => ({
         ...prev,
-        coverImages: [...(prev.coverImages || []), dataUrl],
-        image: dataUrl,
+        coverImages: r.coverImages,
+        image: r.coverImages[0] || prev.image,
+        enableCarousel: (prev.enableCarousel ?? false) && r.coverImages.length >= 2 ? prev.enableCarousel : (r.coverImages.length >= 2 ? prev.enableCarousel : false),
       }));
+      await loadProducts();
     } catch (e: any) {
-      alert('封面图读取失败: ' + (e?.message || e));
+      const status = e?.response?.status ?? e?.status;
+      if (status === 401 || status === 403) {
+        alert('上传失败:当前账号没有上传图片的权限。');
+      } else {
+        alert('封面图上传失败: ' + (e?.message || e));
+      }
     }
   };
 
   const handleDetailUpload = async (file: File) => {
-    if (editingProduct) {
-      try {
-        const r = await DataStore.uploadProductImage(editingProduct.id, file, 'detail');
-        setFormData((prev) => ({ ...prev, detailImages: r.detailImages }));
-        await loadProducts();
-      } catch (e: any) {
+    if (!editingProduct) return;
+    try {
+      const r = await DataStore.uploadProductImage(editingProduct.id, file, 'detail');
+      setFormData((prev) => ({ ...prev, detailImages: r.detailImages }));
+      await loadProducts();
+    } catch (e: any) {
+      const status = e?.response?.status ?? e?.status;
+      if (status === 401 || status === 403) {
+        alert('上传失败:当前账号没有上传图片的权限。');
+      } else {
         alert('详情图上传失败: ' + (e?.message || e));
       }
-      return;
-    }
-    // 新建模式:base64 暂存
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setPendingDetailFiles((prev) => {
-        const next = new Map(prev);
-        next.set(dataUrl, file);
-        return next;
-      });
-      setFormData((prev) => ({
-        ...prev,
-        detailImages: [...(prev.detailImages || []), dataUrl],
-      }));
-    } catch (e: any) {
-      alert('详情图读取失败: ' + (e?.message || e));
     }
   };
 
   const handleRemoveCoverServer = async (url: string) => {
-    // base64 本地暂存的:从 formData + pendingCoverFiles 里删
-    if (url.startsWith('data:')) {
-      setFormData((prev) => ({
-        ...prev,
-        coverImages: (prev.coverImages || []).filter((u) => u !== url),
-        image: prev.coverImages?.[0] !== url ? prev.image : (prev.coverImages || []).filter((u) => u !== url)[0] || '',
-      }));
-      setPendingCoverFiles((prev) => {
-        const next = new Map(prev);
-        next.delete(url);
-        return next;
-      });
-      return;
-    }
-    if (!editingProduct) {
-      // 本地态(还没保存),直接本地删
-      const idx = (formData.coverImages || []).indexOf(url);
-      if (idx >= 0) removeCover(idx);
-      return;
-    }
+    if (!editingProduct) return;
     if (!confirm('确定要删除这张封面图吗?')) return;
     try {
       const r = await DataStore.removeProductImage(editingProduct.id, url, 'cover');
@@ -313,23 +285,7 @@ const AdminProducts: React.FC = () => {
   };
 
   const handleRemoveDetailServer = async (url: string) => {
-    if (url.startsWith('data:')) {
-      setFormData((prev) => ({
-        ...prev,
-        detailImages: (prev.detailImages || []).filter((u) => u !== url),
-      }));
-      setPendingDetailFiles((prev) => {
-        const next = new Map(prev);
-        next.delete(url);
-        return next;
-      });
-      return;
-    }
-    if (!editingProduct) {
-      const idx = (formData.detailImages || []).indexOf(url);
-      if (idx >= 0) removeDetail(idx);
-      return;
-    }
+    if (!editingProduct) return;
     if (!confirm('确定要删除这张详情图吗?')) return;
     try {
       const r = await DataStore.removeProductImage(editingProduct.id, url, 'detail');
@@ -400,65 +356,34 @@ const AdminProducts: React.FC = () => {
 
     setSaving(true);
     try {
-      // 把 base64 暂存的图剥出来(不参与首次 POST,创建完再上传)
+      // 草稿已经有真实 id(editingProduct 一定有值)
+      // 1) PUT 更新草稿/产品的全部信息
+      // 2) 如果是草稿且规格/封面齐全,转为正式产品(isActive = 用户选择)
       const coverUrls: string[] = (formData.coverImages || []).filter((u) => !u.startsWith('data:'));
       const detailUrls: string[] = (formData.detailImages || []).filter((u) => !u.startsWith('data:'));
-
-      if (editingProduct) {
-        // 编辑模式:复用 setProducts(更新基本信息;图片走单独接口已经实时同步了)
-        const payload = {
-          ...formData,
-          coverImages: coverUrls,
-          detailImages: detailUrls,
-          image: coverUrls[0] ?? formData.image ?? '',
-          specs,
-          features,
-        };
-        const updated = products.map((p) =>
-          p.id === editingProduct.id ? { ...p, ...payload, id: editingProduct.id } as Product : p,
-        );
-        await DataStore.setProducts(updated);
-      } else {
-        // 新建模式:1) 创建空产品(没图) → 2) 拿到 id → 3) 循环上传所有 pending 图
-        const createPayload = {
-          name: formData.name!,
-          category: formData.category || CATEGORIES[0],
-          description: formData.description || '',
-          image: '',
-          cover_images: [],
-          detail_images: [],
-          enable_carousel: false,
-          features: features,
-          is_active: formData.isActive ?? true,
-          order: products.length + 1,
-          specs: specs.map((s) => ({
-            name: s.name ?? '',
-            unit: s.unit || '件',
-            price: s.price ?? 0,
-            stock: s.stock ?? 0,
-            min_order: s.minOrder ?? 1,
-            is_active: s.isActive !== false,
-          })),
-        };
-        const created = await DataStore.createProduct(createPayload as any);
-        const newId = created.id;
-
-        // 上传封面图(base64 暂存的那批)
-        let uploadedCovers: string[] = [];
-        for (const dataUrl of (formData.coverImages || []).filter((u) => u.startsWith('data:'))) {
-          const file = pendingCoverFiles.get(dataUrl);
-          if (!file) continue;
-          const r = await DataStore.uploadProductImage(newId, file, 'cover', uploadedCovers.length);
-          uploadedCovers = r.coverImages;
-        }
-        // 上传详情图
-        for (const dataUrl of (formData.detailImages || []).filter((u) => u.startsWith('data:'))) {
-          const file = pendingDetailFiles.get(dataUrl);
-          if (!file) continue;
-          await DataStore.uploadProductImage(newId, file, 'detail');
-        }
-      }
+      const payload = {
+        name: formData.name!,
+        category: formData.category || CATEGORIES[0],
+        description: formData.description || '',
+        image: coverUrls[0] ?? formData.image ?? '',
+        cover_images: coverUrls,
+        detail_images: detailUrls,
+        enable_carousel: !!(formData.enableCarousel && coverUrls.length >= 2),
+        features,
+        is_active: formData.isActive ?? true,
+        order: formData.order ?? products.length + 1,
+        specs: specs.map((s) => ({
+          name: s.name ?? '',
+          unit: s.unit || '件',
+          price: s.price ?? 0,
+          stock: s.stock ?? 0,
+          min_order: s.minOrder ?? 1,
+          is_active: s.isActive !== false,
+        })),
+      };
+      await DataStore.updateProduct(editingProduct!.id, payload as any);
       await loadProducts();
+      setIsDraft(false);  // 草稿状态结束
       setIsDialogOpen(false);
       resetForm();
     } catch (err: any) {
@@ -470,19 +395,32 @@ const AdminProducts: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('确定要删除这个产品吗?删除后无法恢复')) return;
-    const updated = products.filter((p) => p.id !== id);
     try {
-      await DataStore.setProducts(updated);
+      await DataStore.deleteProduct(id);
       await loadProducts();
     } catch (e: any) {
-      // 区分"无权限"和"真出错",给用户清晰提示
       const status = e?.response?.status ?? e?.status;
       if (status === 401 || status === 403) {
-        alert('删除失败:当前账号没有删除产品的权限(需要系统管理员)。请用 admin 账号登录后再试。');
+        alert('删除失败:当前账号没有删除产品的权限(需要系统管理员)。');
       } else {
         alert('删除失败: ' + (e?.message || e));
       }
     }
+  };
+
+  // 弹窗关闭的统一处理:草稿 → 删除草稿;已存在产品 → 不动
+  const handleDialogClose = async () => {
+    if (isDraft && editingProduct) {
+      // 静默删除草稿(用户取消,不打扰)
+      try {
+        await DataStore.deleteProduct(editingProduct.id);
+      } catch {
+        // 草稿删除失败不阻塞 UI
+      }
+      setIsDraft(false);
+    }
+    setIsDialogOpen(false);
+    resetForm();
   };
 
   // 价格汇总
@@ -621,7 +559,13 @@ const AdminProducts: React.FC = () => {
       )}
 
       {/* Edit/Create Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(next) => {
+          if (!next) handleDialogClose();
+          else setIsDialogOpen(true);
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0 flex flex-col">
           <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
             <DialogTitle>
@@ -677,6 +621,7 @@ const AdminProducts: React.FC = () => {
             <CoverImagesSection
               coverImages={formData.coverImages || []}
               canUpload={true}
+              isCreating={!editingProduct}
               onUpload={handleCoverUpload}
               onRemove={handleRemoveCoverServer}
               onMoveUp={(idx) => moveCover(idx, -1)}
@@ -687,6 +632,7 @@ const AdminProducts: React.FC = () => {
             <DetailImagesSection
               detailImages={formData.detailImages || []}
               canUpload={true}
+              isCreating={!editingProduct}
               onUpload={handleDetailUpload}
               onRemove={handleRemoveDetailServer}
               onMoveUp={(idx) => moveDetail(idx, -1)}
@@ -895,7 +841,7 @@ const AdminProducts: React.FC = () => {
           </div>
 
           <DialogFooter className="px-6 py-3 border-t shrink-0 bg-gray-50">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={saving}>
+            <Button variant="outline" onClick={handleDialogClose} disabled={saving}>
               取消
             </Button>
             <Button
@@ -975,6 +921,7 @@ interface CoverImagesSectionProps {
   onRemove: (url: string) => void;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
+  isCreating: boolean;  // 是否新建模式(用于提示文案)
 }
 
 /**
@@ -984,7 +931,7 @@ interface CoverImagesSectionProps {
  * - 第一张不可上移,最后一张不可下移
  */
 const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
-  coverImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown,
+  coverImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown, isCreating,
 }) => {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -1048,7 +995,7 @@ const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
           <p className="text-sm text-gray-700 mb-1 font-medium">点击上传封面图</p>
           <p className="text-xs text-gray-400">
             支持 JPG/PNG/WebP,建议 800×800 以上,最多 5 张
-            {!editingProduct && ' (新建时图片会暂存,创建后自动上传)'}
+            {isCreating && ' (新建模式,图片会即时上传到后端)'}
           </p>
         </button>
       ) : (
@@ -1128,6 +1075,7 @@ interface DetailImagesSectionProps {
   onRemove: (url: string) => void;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
+  isCreating: boolean;
 }
 
 /**
@@ -1135,7 +1083,7 @@ interface DetailImagesSectionProps {
  * - 详情页下拉懒加载展示
  */
 const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
-  detailImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown,
+  detailImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown, isCreating,
 }) => {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -1199,7 +1147,7 @@ const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
           <p className="text-sm text-gray-700 mb-1 font-medium">点击上传详情图</p>
           <p className="text-xs text-gray-400">
             可上传 0~N 张,详情页下拉时会按需懒加载展示
-            {!editingProduct && ' (新建时图片会暂存,创建后自动上传)'}
+            {isCreating && ' (新建模式,图片会即时上传到后端)'}
           </p>
         </button>
       ) : (

@@ -947,6 +947,31 @@ export const DataStore = {
     }
   },
 
+  /**
+   * 物理删除一个产品(后端硬删 + 级联删规格)
+   */
+  async deleteProduct(productId: string): Promise<void> {
+    try {
+      await apiDelete(`/products/${productId}`);
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 更新一个产品(包含规格、封面图等)
+   */
+  async updateProduct(productId: string, payload: any): Promise<Product> {
+    try {
+      const out = await apiPut<Product>(`/products/${productId}`, payload);
+      return out;
+    } catch (error) {
+      console.error('Failed to update product:', error);
+      throw error;
+    }
+  },
+
   async setProducts(products: Product[]): Promise<void> {
     try {
       // 后端没有批量保存接口，逐个创建/更新
