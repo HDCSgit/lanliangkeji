@@ -2,11 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ArrowRight, Eye } from 'lucide-react';
+import { ArrowRight, Eye, Package } from 'lucide-react';
 import { DataStore } from '@/data/store';
 import type { Product } from '@/types';
+import ProductImage from '@/components/ProductImage';
 
 gsap.registerPlugin(ScrollTrigger);
+
+/** 取产品主图 */
+const getMainImage = (p: Product) => p.coverImages?.[0] || p.image || '';
 
 const ProductsSection: React.FC = () => {
   const sectionRef = useRef<HTMLElement>(null);
@@ -117,12 +121,14 @@ const ProductsSection: React.FC = () => {
               onMouseEnter={() => setHoveredProduct(product.id)}
               onMouseLeave={() => setHoveredProduct(null)}
             >
-              {/* Image */}
-              <div className="relative h-56 overflow-hidden">
-                <img
-                  src={product.image}
+              {/* Image - 只显示首张封面图(节省带宽) */}
+              <div className="relative h-56 overflow-hidden bg-gray-100">
+                <ProductImage
+                  src={getMainImage(product)}
                   alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  className="w-full h-full"
+                  imgClassName="group-hover:scale-110 transition-transform duration-700"
+                  sizeHint="thumb"
                 />
                 {/* Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-ocean-deep/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

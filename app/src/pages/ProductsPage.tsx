@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Search, Grid3X3, List, Eye, ChevronRight } from 'lucide-react';
+import { Search, Grid3X3, List, Eye, ChevronRight, Package } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DataStore } from '@/data/store';
 import type { Product } from '@/types';
+import ProductImage from '@/components/ProductImage';
 
 gsap.registerPlugin(ScrollTrigger);
+
+/** 取产品主图:coverImages[0] 优先,兜底 image(兼容老数据) */
+const getMainImage = (p: Product) => p.coverImages?.[0] || p.image || '';
 
 const ProductsPage: React.FC = () => {
   const pageRef = useRef<HTMLDivElement>(null);
@@ -195,18 +199,20 @@ const ProductsPage: React.FC = () => {
                   viewMode === 'grid' ? 'hover:-translate-y-2' : 'flex'
                 }`}
               >
-                {/* Image */}
+                {/* Image - 只显示首张封面图(避免服务器压力 + 多图轮播只在详情页做) */}
                 <div
-                  className={`relative overflow-hidden ${
+                  className={`relative overflow-hidden bg-gray-100 ${
                     viewMode === 'grid' ? 'h-52' : 'w-48 h-40 flex-shrink-0'
                   }`}
                 >
-                  <img
-                    src={product.image}
+                  <ProductImage
+                    src={getMainImage(product)}
                     alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    className="w-full h-full"
+                    imgClassName="group-hover:scale-110 transition-transform duration-500"
+                    sizeHint="thumb"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-ocean-deep/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-ocean-deep/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   <Link
                     to={`/product/${product.id}`}
                     className={`absolute inset-0 flex items-center justify-center bg-ocean-deep/50 opacity-0 group-hover:opacity-100 transition-opacity ${
@@ -275,11 +281,25 @@ const ProductsPage: React.FC = () => {
           {/* Empty State */}
           {filteredProducts.length === 0 && (
             <div className="text-center py-20">
-              <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                <Search className="w-10 h-10 text-gray-400" />
+              <div className="w-20 h-20 rounded-full bg-ocean-foam flex items-center justify-center mx-auto mb-4">
+                {products.length === 0 ? (
+                  <Package className="w-10 h-10 text-ocean-blue" />
+                ) : (
+                  <Search className="w-10 h-10 text-gray-400" />
+                )}
               </div>
-              <h3 className="text-xl font-bold text-ocean-deep mb-2">未找到相关产品</h3>
-              <p className="text-gray-600">请尝试其他搜索条件</p>
+              {products.length === 0 ? (
+                <>
+                  <h3 className="text-xl font-bold text-ocean-deep mb-2">产品中心正在筹备中</h3>
+                  <p className="text-gray-600 mb-4">管理员正在准备上架新产品,敬请期待</p>
+                  <p className="text-xs text-gray-400">如需查看历史产品,请联系客服</p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-ocean-deep mb-2">未找到相关产品</h3>
+                  <p className="text-gray-600">请尝试其他搜索条件</p>
+                </>
+              )}
             </div>
           )}
         </div>

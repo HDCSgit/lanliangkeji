@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ChevronLeft, Minus, Plus, ShoppingCart, CheckCircle,
-  Star, Truck, Shield, Package, Beaker
+  Star, Truck, Shield, Package, Beaker, ChevronLeft as ChevronL, ChevronRight as ChevronR
 } from 'lucide-react';
-import { DataStore, defaultProducts } from '@/data/store';
+import { DataStore } from '@/data/store';
 import { CartStore } from '@/data/ecommerceStore';
 import { UserStore } from '@/data/userStore';
 import type { Product, ProductSpec } from '@/types';
+import ProductImage from '@/components/ProductImage';
 
+/** 详情页 URL:不强制要求登录 token 也能浏览 */
 const ProductDetailPage: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
@@ -20,14 +22,18 @@ const ProductDetailPage: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  // 未登录时引导到登录页,登录成功后回到当前产品详情
+  // 封面图轮播:当前索引
+  const [coverIndex, setCoverIndex] = useState(0);
+  // 详情图懒加载:已"解锁"显示的图片 URL 集合
+  const [revealedDetailImages, setRevealedDetailImages] = useState<Set<string>>(new Set());
+
+  // 未登录时引导到登录页
   const requireLogin = (action: 'addToCart' | 'buyNow'): boolean => {
     if (UserStore.isLoggedIn()) return true;
     toast.warning('请先登录', {
       description: action === 'buyNow' ? '登录后即可下单购买' : '登录后即可加入购物车',
       duration: 2500,
     });
-    // 把当前 URL 作为 redirect 参数,登录成功后跳回
     const redirect = encodeURIComponent(location.pathname + location.search + location.hash);
     setTimeout(() => {
       navigate(`/login?redirect=${redirect}`, { replace: false });
@@ -41,21 +47,97 @@ const ProductDetailPage: React.FC = () => {
         navigate('/products');
         return;
       }
-      const products = await DataStore.getProducts();
-      const found = products.find((p) => p.id === productId) || defaultProducts.find((p) => p.id === productId);
-      if (found) {
-        setProduct(found);
-        const productSpecs = found.specs || [];
-        setSpecs(productSpecs);
-        if (productSpecs.length > 0) {
-          setSelectedSpec(productSpecs[0].id);
-        }
-      } else {
+      // 用公开接口直接拉(允许未登录),失败再走 getProducts 兜底
+      let found: Product | null = null;
+      try {
+        const products = await DataStore.getProducts();
+        found = products.find((p) => p.id === productId) || null;
+      } catch (e) {
+        console.error('Failed to load product:', e);
+      }
+      if (!found) {
+        toast.error('产品不存在或已下架');
         navigate('/products');
+        return;
+      }
+      setProduct(found);
+      const productSpecs = found.specs || [];
+      setSpecs(productSpecs);
+      if (productSpecs.length > 0) {
+        setSelectedSpec(productSpecs[0].id);
       }
     };
     loadProduct();
   }, [productId, navigate]);
+
+  const coverImages = (product?.coverImages?.length ? product.coverImages : (product?.image ? [product.image] : []));
+  const detailImages = product?.detailImages || [];
+  const shouldCarousel = !!product?.enableCarousel && coverImages.length >= 2;
+
+  // 封面图轮播定时器
+  useEffect(() => {
+    if (!shouldCarousel) return;
+    const timer = setInterval(() => {
+      setCoverIndex((idx) => (idx + 1) % coverImages.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [shouldCarousel, coverImages.length]);
+
+  // 详情图懒加载:IntersectionObserver,进入视口 200px 时解锁
+  useEffect(() => {
+    if (detailImages.length === 0) return;
+    // 用 setTimeout 让 IntersectionObserver 在 DOM 渲染后绑定
+    const observers: IntersectionObserver[] = [];
+    let cancelled = false;
+
+    const bindObservers = () => {
+      if (cancelled) return;
+      // 先把"已经渲染出的图"立即解锁(用户快速滚动到时,避免空白)
+      const visibleEls = document.querySelectorAll<HTMLElement>('[data-detail-img-anchor]');
+      visibleEls.forEach((el) => {
+        const url = el.dataset.detailImgUrl;
+        if (url) {
+          setRevealedDetailImages((prev) => {
+            if (prev.has(url)) return prev;
+            const next = new Set(prev);
+            next.add(url);
+            return next;
+          });
+        }
+      });
+
+      visibleEls.forEach((el) => {
+        const url = el.dataset.detailImgUrl;
+        if (!url) return;
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                setRevealedDetailImages((prev) => {
+                  if (prev.has(url)) return prev;
+                  const next = new Set(prev);
+                  next.add(url);
+                  return next;
+                });
+                observer.disconnect();
+              }
+            });
+          },
+          { rootMargin: '300px', threshold: 0.01 },
+        );
+        observer.observe(el);
+        observers.push(observer);
+      });
+    };
+
+    // 下一帧绑定,确保 DOM 已渲染
+    const raf = requestAnimationFrame(bindObservers);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      observers.forEach((o) => o.disconnect());
+    };
+  }, [detailImages.length, product?.id]);
 
   const currentSpec = specs.find((s) => s.id === selectedSpec);
   const subtotal = currentSpec ? currentSpec.price * quantity : 0;
@@ -68,7 +150,7 @@ const ProductDetailPage: React.FC = () => {
       await CartStore.add({
         productId: product.id,
         productName: product.name,
-        productImage: product.image,
+        productImage: coverImages[0] || product.image,
         specId: currentSpec.id,
         specName: currentSpec.name,
         unit: currentSpec.unit,
@@ -91,7 +173,7 @@ const ProductDetailPage: React.FC = () => {
       await CartStore.add({
         productId: product.id,
         productName: product.name,
-        productImage: product.image,
+        productImage: coverImages[0] || product.image,
         specId: currentSpec.id,
         specName: currentSpec.name,
         unit: currentSpec.unit,
@@ -104,7 +186,23 @@ const ProductDetailPage: React.FC = () => {
     }
   };
 
-  if (!product) return null;
+  const nextCover = useCallback(() => {
+    setCoverIndex((idx) => (idx + 1) % coverImages.length);
+  }, [coverImages.length]);
+  const prevCover = useCallback(() => {
+    setCoverIndex((idx) => (idx - 1 + coverImages.length) % coverImages.length);
+  }, [coverImages.length]);
+
+  if (!product) {
+    return (
+      <div className="min-h-screen pt-20 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-ocean-blue border-t-transparent animate-spin" />
+          <p className="text-gray-500">正在加载产品...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-20 bg-gray-50">
@@ -119,20 +217,109 @@ const ProductDetailPage: React.FC = () => {
         </button>
 
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Product Image */}
+          {/* Product Image - 封面图轮播或单图 */}
           <div>
-            <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-              <img
-                src={product.image}
-                alt={product.name}
-                className="w-full h-[400px] lg:h-[500px] object-cover"
-              />
+            <div className="bg-white rounded-2xl shadow-card overflow-hidden relative">
+              {/* 封面图区(支持轮播) */}
+              <div className="relative aspect-square">
+                {coverImages.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center text-gray-300">
+                    <Package className="w-20 h-20" />
+                  </div>
+                ) : (
+                  <>
+                    {/* 用绝对定位叠放所有图,通过 coverIndex 显示 */}
+                    {coverImages.map((url, idx) => (
+                      <div
+                        key={url + idx}
+                        className={`absolute inset-0 transition-opacity duration-700 ${
+                          idx === coverIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                        }`}
+                      >
+                        <ProductImage
+                          src={url}
+                          alt={`${product.name} - 图 ${idx + 1}`}
+                          aspectRatio="1/1"
+                          className="w-full h-full"
+                          priority={idx === 0}
+                          sizeHint="medium"
+                        />
+                      </div>
+                    ))}
+
+                    {/* 左右切换按钮 - 只有轮播模式才显示 */}
+                    {shouldCarousel && coverImages.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={prevCover}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow-md transition-all hover:scale-110"
+                          aria-label="上一张"
+                        >
+                          <ChevronL className="w-5 h-5 text-ocean-deep" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={nextCover}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow-md transition-all hover:scale-110"
+                          aria-label="下一张"
+                        >
+                          <ChevronR className="w-5 h-5 text-ocean-deep" />
+                        </button>
+                      </>
+                    )}
+
+                    {/* 指示器圆点 */}
+                    {shouldCarousel && coverImages.length > 1 && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+                        {coverImages.map((_, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setCoverIndex(idx)}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              idx === coverIndex
+                                ? 'w-6 bg-ocean-blue'
+                                : 'w-1.5 bg-white/60 hover:bg-white'
+                            }`}
+                            aria-label={`第 ${idx + 1} 张`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* 缩略图条(轮播时显示) */}
+              {shouldCarousel && coverImages.length > 1 && (
+                <div className="px-3 py-3 flex gap-2 overflow-x-auto border-t">
+                  {coverImages.map((url, idx) => (
+                    <button
+                      key={url + idx}
+                      type="button"
+                      onClick={() => setCoverIndex(idx)}
+                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                        idx === coverIndex
+                          ? 'border-ocean-blue scale-105'
+                          : 'border-transparent opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={url}
+                        alt={`缩略图 ${idx + 1}`}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Product Info */}
           <div className="space-y-6">
-            {/* Header */}
             <div>
               <span className="px-3 py-1 bg-ocean-blue/10 text-ocean-blue text-sm rounded-full">
                 {product.category}
@@ -263,22 +450,83 @@ const ProductDetailPage: React.FC = () => {
               ))}
             </div>
 
-            {/* Product Specs */}
-            <div className="pt-4 border-t">
-              <h3 className="font-bold text-ocean-deep mb-3">产品规格</h3>
-              <div className="grid grid-cols-1 gap-2">
-                {product.specs.map((spec, i) => (
-                  <div key={i} className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500 text-sm">{spec.name}</span>
-                    <span className="text-ocean-deep text-sm">
-                      ¥{spec.price}/{spec.unit} · 库存{spec.stock}{spec.unit}
-                    </span>
-                  </div>
-                ))}
+            {/* Product Specs Table */}
+            {product.specs && product.specs.length > 0 && (
+              <div className="pt-4 border-t">
+                <h3 className="font-bold text-ocean-deep mb-3">产品规格</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {product.specs.map((spec, i) => (
+                    <div key={i} className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500 text-sm">{spec.name}</span>
+                      <span className="text-ocean-deep text-sm">
+                        ¥{spec.price}/{spec.unit} · 库存{spec.stock}{spec.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
+
+        {/* 详情图区 - 详情页下拉时懒加载 */}
+        {detailImages.length > 0 && (
+          <section className="mt-12">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
+              <h3 className="text-xl font-bold text-ocean-deep">产品详情</h3>
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
+            </div>
+            <div className="space-y-3 max-w-3xl mx-auto">
+              {detailImages.map((url, idx) => {
+                const revealed = revealedDetailImages.has(url);
+                return (
+                  <div
+                    key={url + idx}
+                    data-detail-img-anchor
+                    data-detail-img-url={url}
+                    className="rounded-xl overflow-hidden bg-gray-100"
+                  >
+                    {revealed ? (
+                      <ProductImage
+                        src={url}
+                        alt={`详情图 ${idx + 1}`}
+                        className="w-full"
+                        imgClassName="w-full h-auto"
+                        aspectRatio="16/10"
+                        lazy
+                        sizeHint="large"
+                      />
+                    ) : (
+                      <div
+                        className="w-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400"
+                        style={{ aspectRatio: '16/10' }}
+                      >
+                        <span className="text-sm">详情图 {idx + 1} - 滚动到此加载</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* 产品特点 chips */}
+        {product.features && product.features.length > 0 && (
+          <section className="mt-10 max-w-3xl mx-auto">
+            <div className="flex flex-wrap gap-2 justify-center">
+              {product.features.map((f, i) => (
+                <span
+                  key={i}
+                  className="px-4 py-2 bg-green-50 text-green-700 text-sm rounded-full border border-green-100"
+                >
+                  ✓ {f}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
