@@ -119,8 +119,17 @@ const AdminProducts: React.FC = () => {
   };
 
   const openCreateDialog = () => {
-    resetForm();
-    setIsDialogOpen(true);
+    // eslint-disable-next-line no-console
+    console.log('[AdminProducts] openCreateDialog called, editingProduct=', editingProduct, 'isDialogOpen before=', isDialogOpen);
+    try {
+      resetForm();
+      setIsDialogOpen(true);
+      // eslint-disable-next-line no-console
+      console.log('[AdminProducts] openCreateDialog setIsDialogOpen(true) done');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[AdminProducts] openCreateDialog error:', e);
+    }
   };
 
   // ---- 规格编辑 ----
