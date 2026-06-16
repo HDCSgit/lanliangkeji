@@ -33,26 +33,33 @@ _STORAGE_CONFIGS_EXTRA_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
 )
 
 
+# Products 表新增列（与 models.Product 保持一致）
+# - cover_images: 封面图数组(JSON)
+# - detail_images: 详情图数组(JSON)
+# - enable_carousel: 是否启用封面轮播
+_PRODUCTS_EXTRA_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
+    ("cover_images", "JSON", "'[]'"),
+    ("detail_images", "JSON", "'[]'"),
+    ("enable_carousel", "BOOLEAN", "0"),
+)
+
+
 def _sqlite_physical_columns(engine: Engine, table: str) -> set[str]:
     """从 SQLite 真实数据库里读出该表的所有列名（区分大小写）。"""
     insp = inspect(engine)
     return {c["name"] for c in insp.get_columns(table)}
 
 
-def patch_storage_configs_columns(engine: Engine) -> list[str]:
-    """
-    检查 storage_configs 表，给缺失列自动 ADD COLUMN。
-    返回本次补上的列名列表。
-    """
-    table = "storage_configs"
+def _patch_columns(engine: Engine, table: str, columns: Tuple[Tuple[str, str, str], ...]) -> list[str]:
+    """通用补列逻辑：检查表里是否有每个列，没有就 ADD COLUMN。"""
     added: list[str] = []
     try:
         existing = _sqlite_physical_columns(engine, table)
     except Exception as e:
-        logger.warning("patch_storage_configs_columns: 无法读取表 %s: %s", table, e)
+        logger.warning("_patch_columns(%s): 无法读取表结构: %s", table, e)
         return added
 
-    for col_name, col_type, default_sql in _STORAGE_CONFIGS_EXTRA_COLUMNS:
+    for col_name, col_type, default_sql in columns:
         if col_name in existing:
             continue
         stmt = f'ALTER TABLE {table} ADD COLUMN {col_name} {col_type} DEFAULT {default_sql}'
@@ -60,13 +67,29 @@ def patch_storage_configs_columns(engine: Engine) -> list[str]:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             added.append(col_name)
-            logger.info("patch_storage_configs_columns: ADD COLUMN %s.%s", table, col_name)
+            logger.info("_patch_columns(%s): ADD COLUMN %s", table, col_name)
         except Exception as e:
             logger.error(
-                "patch_storage_configs_columns: 添加列 %s.%s 失败: %s",
+                "_patch_columns(%s): 添加列 %s 失败: %s",
                 table, col_name, e,
             )
     return added
+
+
+def patch_storage_configs_columns(engine: Engine) -> list[str]:
+    """
+    检查 storage_configs 表，给缺失列自动 ADD COLUMN。
+    返回本次补上的列名列表。
+    """
+    return _patch_columns(engine, "storage_configs", _STORAGE_CONFIGS_EXTRA_COLUMNS)
+
+
+def patch_products_columns(engine: Engine) -> list[str]:
+    """
+    检查 products 表，给缺失列自动 ADD COLUMN。
+    返回本次补上的列名列表。
+    """
+    return _patch_columns(engine, "products", _PRODUCTS_EXTRA_COLUMNS)
 
 
 def apply_schema_patches(engine: Engine) -> None:
@@ -79,9 +102,11 @@ def apply_schema_patches(engine: Engine) -> None:
     - 对已有 NULL 默认值的列补 DEFAULT 也不会回填历史行
     """
     try:
-        added = patch_storage_configs_columns(engine)
-        if added:
-            logger.info("apply_schema_patches: 已补齐列 %s", added)
+        added_storage = patch_storage_configs_columns(engine)
+        added_products = patch_products_columns(engine)
+        all_added = added_storage + added_products
+        if all_added:
+            logger.info("apply_schema_patches: 已补齐列 %s", all_added)
         else:
             logger.debug("apply_schema_patches: 无需补列")
     except Exception as e:

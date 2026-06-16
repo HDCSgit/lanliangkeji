@@ -2,7 +2,8 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from app.core.config import settings
@@ -44,6 +45,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# GZip 压缩:对 JSON / 文本响应启用 gzip(最小 500 字节才压)
+# 省 API 响应的带宽(WebP 图片本身已压缩,gzip 对它收益小,但 API 文本受益大)
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -53,9 +58,24 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Static files for uploads
+class CachedStaticFiles(StaticFiles):
+    """
+    给静态资源加上长 Cache-Control 头,让浏览器/CDN 缓存。
+    产品图基本不会改文件名(hash 命名),所以 max-age=30 天很安全。
+    """
+
+    async def get_response(self, path: str, scope: dict) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            # 30 天 = 2592000 秒;配合 hash 文件名,改名即失效,安全
+            response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+            response.headers["Vary"] = "Accept-Encoding"
+        return response
+
+
+# Static files for uploads (加缓存)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+app.mount("/uploads", CachedStaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # API routes
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
@@ -79,6 +99,6 @@ def health_check():
     return {"status": "ok"}
 
 
-if __name__ == "__main__:":
+if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)

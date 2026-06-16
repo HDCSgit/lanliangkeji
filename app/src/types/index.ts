@@ -49,7 +49,14 @@ export interface Product {
   name: string;
   category: string;
   description: string;
+  // 兼容字段:作为 coverImages[0] 的镜像
   image: string;
+  // 封面图列表(1-5 张),详情页可按需轮播
+  coverImages: string[];
+  // 详情图列表(0-N 张),详情页下拉时懒加载展示
+  detailImages: string[];
+  // 是否启用封面轮播(只有 ≥2 张封面图时才有意义;1 张时强制不轮播)
+  enableCarousel: boolean;
   price?: string;
   specs: ProductSpec[];
   features: string[];

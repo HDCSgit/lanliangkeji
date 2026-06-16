@@ -104,7 +104,14 @@ class ProductBase(BaseModel):
     name: str
     category: str
     description: str
-    image: str
+    # 兼容旧字段:image 是 coverImages[0] 的镜像,旧代码读不到 coverImages 时仍能显示
+    image: str = ""
+    # 封面图列表:1-5 张,在详情页可按需轮播
+    cover_images: List[str] = []
+    # 详情图列表:0-N 张,在详情页下拉时懒加载展示
+    detail_images: List[str] = []
+    # 是否启用封面轮播(1 张时强制不轮播)
+    enable_carousel: bool = False
     features: List[str] = []
     is_active: bool = True
     order: int = 0

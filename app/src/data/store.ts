@@ -78,98 +78,8 @@ export const defaultBanners: Banner[] = [
 ];
 
 // Default Products
-export const defaultProducts: Product[] = [
-  {
-    id: '1',
-    name: '海藻提取物',
-    category: '海洋生物制品',
-    description: '采用先进提取技术，从深海海藻中提取高纯度活性成分，广泛应用于食品、化妆品和医药领域。',
-    image: '/images/products/product-1-seaweed-extract.jpg',
-    specs: [
-      { id: '1-1', name: '25kg/桶', unit: '桶', price: 1280, stock: 100, minOrder: 1, isActive: true },
-      { id: '1-2', name: '1kg/袋', unit: '袋', price: 68, stock: 500, minOrder: 1, isActive: true },
-    ],
-    features: ['高纯度提取', '天然无添加', '易溶于水', '稳定性好'],
-    isActive: true,
-    order: 1,
-    createdAt: '2024-01-01',
-  },
-  {
-    id: '2',
-    name: '鱼胶原蛋白肽',
-    category: '海洋生物制品',
-    description: '从深海鱼类中提取的高纯度胶原蛋白肽，分子量小，易吸收，是理想的美容养颜原料。',
-    image: '/images/products/product-2-fish-collagen.jpg',
-    specs: [
-      { id: '2-1', name: '20kg/袋', unit: '袋', price: 1580, stock: 80, minOrder: 1, isActive: true },
-      { id: '2-2', name: '500g/袋', unit: '袋', price: 88, stock: 300, minOrder: 1, isActive: true },
-    ],
-    features: ['小分子易吸收', '高纯度', '无腥味', '溶解性好'],
-    isActive: true,
-    order: 2,
-    createdAt: '2024-01-02',
-  },
-  {
-    id: '3',
-    name: '深海鱼油',
-    category: '健康食材',
-    description: '源自深海冷水鱼类，富含EPA和DHA，是优质的营养补充剂原料。',
-    image: '/images/products/product-3-fish-oil.jpg',
-    specs: [
-      { id: '3-1', name: '190kg/桶', unit: '桶', price: 6800, stock: 50, minOrder: 1, isActive: true },
-      { id: '3-2', name: '5L/瓶', unit: '瓶', price: 298, stock: 200, minOrder: 1, isActive: true },
-    ],
-    features: ['高纯度Omega-3', '低氧化值', '无重金属', 'TG型结构'],
-    isActive: true,
-    order: 3,
-    createdAt: '2024-01-03',
-  },
-  {
-    id: '4',
-    name: '海鲜干货',
-    category: '水产深加工',
-    description: '精选优质海鲜原料，采用传统工艺与现代技术相结合，保留海鲜的鲜美口感。',
-    image: '/images/products/product-4-seafood-dried.jpg',
-    specs: [
-      { id: '4-1', name: '500g/袋', unit: '袋', price: 128, stock: 300, minOrder: 1, isActive: true },
-      { id: '4-2', name: '1kg/礼盒', unit: '盒', price: 238, stock: 150, minOrder: 1, isActive: true },
-    ],
-    features: ['传统工艺', '原汁原味', '营养丰富', '便于储存'],
-    isActive: true,
-    order: 4,
-    createdAt: '2024-01-04',
-  },
-  {
-    id: '5',
-    name: '虾青素',
-    category: '海洋生物制品',
-    description: '从雨生红球藻中提取的天然虾青素，是强效的天然抗氧化剂。',
-    image: '/images/products/product-5-astaxanthin.jpg',
-    specs: [
-      { id: '5-1', name: '1kg/袋', unit: '袋', price: 1980, stock: 60, minOrder: 1, isActive: true },
-      { id: '5-2', name: '100g/瓶', unit: '瓶', price: 258, stock: 120, minOrder: 1, isActive: true },
-    ],
-    features: ['天然提取', '高活性', '强抗氧化', '稳定性好'],
-    isActive: true,
-    order: 5,
-    createdAt: '2024-01-05',
-  },
-  {
-    id: '6',
-    name: '海洋酵素',
-    category: '海洋生物制品',
-    description: '采用深海微生物发酵技术生产的复合酵素，具有多种生物活性。',
-    image: '/images/products/product-6-marine-enzyme.jpg',
-    specs: [
-      { id: '6-1', name: '25kg/桶', unit: '桶', price: 1680, stock: 70, minOrder: 1, isActive: true },
-      { id: '6-2', name: '1kg/袋', unit: '袋', price: 88, stock: 250, minOrder: 1, isActive: true },
-    ],
-    features: ['高酶活力', '多酶复合', '低温提取', '活性稳定'],
-    isActive: true,
-    order: 6,
-    createdAt: '2024-01-06',
-  },
-];
+// 空数组:产品由管理员在后管创建;API 失败时不再用硬编码示例兜底,避免显示与生产不符的产品
+export const defaultProducts: Product[] = [];
 
 // Default News
 export const defaultNews: News[] = [
@@ -1040,11 +950,17 @@ export const DataStore = {
           min_order: s.minOrder ?? 1,
           is_active: s.isActive !== false,
         }));
+        const coverImages = (product.coverImages || []).filter(Boolean);
+        const detailImages = (product.detailImages || []).filter(Boolean);
         const payload = {
           name: product.name,
           category: product.category,
           description: product.description ?? '',
           image: product.image ?? '',
+          // 新增:封面图(1-5)、详情图(0-N)、轮播开关
+          cover_images: coverImages,
+          detail_images: detailImages,
+          enable_carousel: !!product.enableCarousel && coverImages.length >= 2,
           features: product.features ?? [],
           // 关键:isActive 字段必须显式传布尔值,不能 undefined
           is_active: product.isActive !== false,
@@ -1068,6 +984,99 @@ export const DataStore = {
       console.error('Failed to save products:', error);
       throw error;
     }
+  },
+
+  /**
+   * 上传产品图片(封面图/详情图),后端会自动加到对应列表。
+   * 返回 { path, coverImages, detailImages, enableCarousel, product }
+   */
+  async uploadProductImage(
+    productId: string,
+    file: File,
+    kind: 'cover' | 'detail' = 'cover',
+    position?: number,
+  ): Promise<{ path: string; coverImages: string[]; detailImages: string[]; enableCarousel: boolean; product: Product }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('kind', kind);
+    if (position !== undefined) formData.append('position', String(position));
+    const data = await apiPost<{
+      id: string;
+      image: string;
+      cover_images: string[];
+      detail_images: string[];
+      enable_carousel: boolean;
+      product: Product;
+    }>(`/products/${productId}/image`, formData);
+    return {
+      path: data.image,
+      coverImages: data.cover_images || [],
+      detailImages: data.detail_images || [],
+      enableCarousel: !!data.enable_carousel,
+      product: data.product,
+    };
+  },
+
+  /**
+   * 从产品的 cover_images / detail_images 中移除一张图片(不删除磁盘文件)
+   */
+  async removeProductImage(
+    productId: string,
+    imageUrl: string,
+    kind: 'cover' | 'detail' = 'cover',
+  ): Promise<{ coverImages: string[]; detailImages: string[]; enableCarousel: boolean; product: Product }> {
+    const data = await apiDelete<{
+      id: string;
+      cover_images: string[];
+      detail_images: string[];
+      enable_carousel: boolean;
+      product: Product;
+    }>(`/products/${productId}/image?kind=${kind}&image_url=${encodeURIComponent(imageUrl)}`);
+    return {
+      coverImages: data.cover_images || [],
+      detailImages: data.detail_images || [],
+      enableCarousel: !!data.enable_carousel,
+      product: data.product,
+    };
+  },
+
+  /**
+   * 重排 cover_images / detail_images(拖拽排序)
+   */
+  async reorderProductImages(
+    productId: string,
+    kind: 'cover' | 'detail',
+    urls: string[],
+  ): Promise<{ coverImages: string[]; detailImages: string[]; enableCarousel: boolean; product: Product }> {
+    const params = new URLSearchParams();
+    params.set('kind', kind);
+    urls.forEach((u) => params.append('urls', u));
+    const data = await apiPut<{
+      id: string;
+      cover_images: string[];
+      detail_images: string[];
+      enable_carousel: boolean;
+      product: Product;
+    }>(`/products/${productId}/images/reorder?${params.toString()}`);
+    return {
+      coverImages: data.cover_images || [],
+      detailImages: data.detail_images || [],
+      enableCarousel: !!data.enable_carousel,
+      product: data.product,
+    };
+  },
+
+  /**
+   * 切换产品封面图轮播(只有 ≥2 张封面图才会真正开启)
+   */
+  async toggleProductCarousel(
+    productId: string,
+    enable: boolean,
+  ): Promise<{ enableCarousel: boolean }> {
+    const data = await apiPut<{ id: string; enable_carousel: boolean }>(
+      `/products/${productId}/carousel?enable=${enable ? 'true' : 'false'}`,
+    );
+    return { enableCarousel: !!data.enable_carousel };
   },
 
   async setNews(news: News[]): Promise<void> {

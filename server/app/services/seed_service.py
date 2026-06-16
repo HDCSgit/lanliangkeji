@@ -15,7 +15,7 @@ def seed_all(db: Session):
     seed_payment_gateway(db)
     seed_site_config(db)
     seed_banners(db)
-    seed_products(db)
+    # seed_products: 不再 seed 默认产品 - 由管理员在后管创建
     seed_news(db)
     seed_partners(db)
     seed_nav_items(db)

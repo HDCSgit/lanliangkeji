@@ -73,7 +73,14 @@ class Product(Base):
     name = Column(String(200), nullable=False)
     category = Column(String(100), nullable=False)
     description = Column(Text, nullable=False)
-    image = Column(String(500), nullable=False)
+    # 兼容字段:作为 cover_images[0] 的副本,避免前端零迁移时图片空白
+    image = Column(String(500), nullable=False, default="")
+    # 封面图列表:1-5 张,详情页可轮播
+    cover_images = Column(JSON, default=list)
+    # 详情图列表:0-N 张,详情页下拉懒加载展示
+    detail_images = Column(JSON, default=list)
+    # 是否启用封面图轮播(只有 ≥2 张封面图才有意义;1 张时强制 False)
+    enable_carousel = Column(Boolean, default=False)
     features = Column(JSON, default=list)
     is_active = Column(Boolean, default=True)
     order = Column(Integer, default=0)
