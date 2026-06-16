@@ -278,6 +278,13 @@ def alipay_query(
     """
     主动查询支付宝订单(给前端轮询 / 重新确认结果用)。
     body: { out_trade_no: string }
+
+    安全边界(由"调真实支付宝网关"保证,不在本路由加额外限制):
+    1. 调用者必须是订单所有者 / sysadmin / auditor
+    2. 后端走真实支付宝网关验证 trade_status (TRADE_SUCCESS/TRADE_FINISHED),
+       攻击者无法伪造 (需要 AlipayClient app_private_key 签名才能调用
+       openapi.alipay.com)
+    3. 只有 status=PENDING 的订单才允许 settle,避免回滚已 settled 的状态
     """
     out_trade_no = payload.get("out_trade_no") if isinstance(payload, dict) else None
     if not out_trade_no:
@@ -294,7 +301,9 @@ def alipay_query(
     query_resp = alipay_query_order(out_trade_no)
     if query_resp.get("ok"):
         r = query_resp["result"]
-        if trade_status_paid(r.get("trade_status", "")):
+        # 关键：只在 status=PENDING 时才允许主动 confirm paid
+        # (已 paid/expired/failed 的订单不重复标记,防止回滚)
+        if trade_status_paid(r.get("trade_status", "")) and payment.status == PaymentStatus.PENDING:
             try:
                 _mark_paid_and_settle(db, payment)
                 db.refresh(payment)

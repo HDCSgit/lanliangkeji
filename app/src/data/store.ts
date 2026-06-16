@@ -891,10 +891,16 @@ export const DataStore = {
 
   async getProducts(): Promise<Product[]> {
     try {
-      return await apiGet<Product[]>('/products/');
+      // 后台管理:返回全量(含已下架),前端展示上架/下架状态;前端判断 isActive
+      return await apiGet<Product[]>('/admin/products');
     } catch (error) {
       console.error('Failed to load products:', error);
-      return defaultProducts;
+      // 兜底:公开接口只返上架的
+      try {
+        return await apiGet<Product[]>('/products/');
+      } catch {
+        return defaultProducts;
+      }
     }
   },
 
@@ -1024,23 +1030,26 @@ export const DataStore = {
       const inputIds = new Set(products.map((p) => p.id));
 
       for (const product of products) {
+        // 规范化价格/库存:表单可能传 null(用户清空输入框),提交时转 0
+        const normalizedSpecs = product.specs.map((s) => ({
+          id: s.id,
+          name: s.name ?? '',
+          unit: s.unit || '件',
+          price: s.price ?? 0,
+          stock: s.stock ?? 0,
+          min_order: s.minOrder ?? 1,
+          is_active: s.isActive !== false,
+        }));
         const payload = {
           name: product.name,
           category: product.category,
-          description: product.description,
-          image: product.image,
-          features: product.features,
-          is_active: product.isActive,
-          order: product.order,
-          specs: product.specs.map((s) => ({
-            id: s.id,
-            name: s.name,
-            unit: s.unit || '件',
-            price: s.price ?? 0,
-            stock: s.stock ?? 0,
-            min_order: s.minOrder ?? 1,
-            is_active: s.isActive ?? true,
-          })),
+          description: product.description ?? '',
+          image: product.image ?? '',
+          features: product.features ?? [],
+          // 关键:isActive 字段必须显式传布尔值,不能 undefined
+          is_active: product.isActive !== false,
+          order: product.order ?? 0,
+          specs: normalizedSpecs,
         };
         if (existingIds.has(product.id)) {
           await apiPut(`/products/${product.id}`, payload);

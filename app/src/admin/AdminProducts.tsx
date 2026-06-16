@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+// 注意:ProductSpec.price/stock 类型是 number,但表单输入允许空字符串
+// 用 Partial<ProductSpec> + as any 在表单编辑时使用,提交前再 normalize
 import {
   Plus, Edit2, Trash2, Eye, EyeOff, Search,
   ImageIcon, X, Package
@@ -113,8 +115,8 @@ const AdminProducts: React.FC = () => {
         id: `spec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: '',
         unit: '件',
-        price: 0,
-        stock: 0,
+        price: null as any,
+        stock: null as any,
         minOrder: 1,
         isActive: true,
       } as ProductSpec,
@@ -519,8 +521,8 @@ const AdminProducts: React.FC = () => {
                           <td className="px-3 py-1.5">
                             <input
                               type="text"
-                              value={spec.name}
-                              onChange={(e) => updateSpec(index, { name: e.target.value })}
+                              value={spec.name ?? ''}
+                              onChange={(e) => updateSpec(index, { name: e.target.value } as any)}
                               placeholder="例如:500g装"
                               className="w-full px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
@@ -528,39 +530,55 @@ const AdminProducts: React.FC = () => {
                           <td className="px-3 py-1.5">
                             <input
                               type="text"
-                              value={spec.unit}
-                              onChange={(e) => updateSpec(index, { unit: e.target.value })}
+                              value={spec.unit ?? ''}
+                              onChange={(e) => updateSpec(index, { unit: e.target.value } as any)}
                               placeholder="件/盒/kg"
                               className="w-20 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
                           <td className="px-3 py-1.5">
                             <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={spec.price}
-                              onChange={(e) => updateSpec(index, { price: Number(e.target.value) || 0 })}
+                              type="text"
+                              inputMode="decimal"
+                              value={spec.price === null || spec.price === undefined ? '' : String(spec.price)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                // 允许空字符串 + 数字 + 小数点
+                                if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                                  updateSpec(index, { price: v === '' ? null : (parseFloat(v) as any) } as any);
+                                }
+                              }}
                               placeholder="0.00"
                               className="w-24 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
                           <td className="px-3 py-1.5">
                             <input
-                              type="number"
-                              min="0"
-                              value={spec.stock}
-                              onChange={(e) => updateSpec(index, { stock: Number(e.target.value) || 0 })}
+                              type="text"
+                              inputMode="numeric"
+                              value={spec.stock === null || spec.stock === undefined ? '' : String(spec.stock)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                // 允许空字符串 + 整数
+                                if (v === '' || /^\d*$/.test(v)) {
+                                  updateSpec(index, { stock: v === '' ? null : (parseInt(v, 10) as any) } as any);
+                                }
+                              }}
                               placeholder="0"
                               className="w-20 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
                           <td className="px-3 py-1.5">
                             <input
-                              type="number"
-                              min="1"
-                              value={spec.minOrder}
-                              onChange={(e) => updateSpec(index, { minOrder: Number(e.target.value) || 1 })}
+                              type="text"
+                              inputMode="numeric"
+                              value={spec.minOrder === null || spec.minOrder === undefined ? '' : String(spec.minOrder)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || /^\d*$/.test(v)) {
+                                  updateSpec(index, { minOrder: v === '' ? null : (parseInt(v, 10) as any) } as any);
+                                }
+                              }}
                               placeholder="1"
                               className="w-16 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />

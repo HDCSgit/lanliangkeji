@@ -54,10 +54,10 @@ const AdminLogin: React.FC = () => {
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>用户名/手机号</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>账号</label>
               <div style={{ position: 'relative' }}>
                 <User style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', color: '#9ca3af' }} />
-                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="请输入用户名" required style={{ width: '100%', paddingLeft: '40px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="系统管理者输入 sysadmin,审核员输入手机号" required style={{ width: '100%', paddingLeft: '40px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
               </div>
             </div>
 
@@ -78,8 +78,9 @@ const AdminLogin: React.FC = () => {
           </form>
 
           <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-            <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center' }}>系统管理者：sysadmin / sysadmin123</p>
-            <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center' }}>管理员：admin / admin123</p>
+            <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center' }}>系统管理者:sysadmin</p>
+            <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center' }}>审核员:18050767545</p>
+            <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center' }}>(密码请向运营索取,账号支持任意字符)</p>
           </div>
         </div>
       </div>

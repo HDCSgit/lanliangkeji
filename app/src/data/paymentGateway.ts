@@ -305,11 +305,25 @@ export const PaymentAPI = {
   },
 
   // 查询支付状态（依赖后端判断是否过期，避免本地时区解析差异）
+  // 关键：本地 PENDING 时，主动向支付宝发起一次 query（即使用户已支付、notify 未及时到达）
   async queryPaymentStatus(paymentNo: string): Promise<'pending' | 'paid' | 'failed' | 'expired'> {
     try {
       const payment = await PaymentOrderStore.getByPaymentNo(paymentNo);
       if (!payment) return 'failed';
-      return payment.status as 'pending' | 'paid' | 'failed' | 'expired';
+      if (payment.status === 'paid') return 'paid';
+      if (payment.status === 'failed') return 'failed';
+      if (payment.status === 'expired') return 'expired';
+
+      // 本地仍 PENDING：可能是支付宝 notify 延迟或漏发，主动 query 一次
+      if (payment.status === 'pending') {
+        const q = await this.alipayQuery(paymentNo);
+        if (q.paid) return 'paid';
+        // 兜底：query 接口本身成功，但表示未支付，可能是 expired
+        if (q.tradeStatus === 'TRADE_CLOSED' || q.tradeStatus === 'TRADE_FINISHED') {
+          return q.tradeStatus === 'TRADE_FINISHED' ? 'paid' : 'expired';
+        }
+      }
+      return 'pending';
     } catch {
       return 'failed';
     }

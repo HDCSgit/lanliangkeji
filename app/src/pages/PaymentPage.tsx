@@ -446,12 +446,9 @@ const PaymentPage: React.FC = () => {
                       //      会 pop 当前 history, 用户回到 #/checkout "选择支付方式" 页。
                       //      用中转页后, 前端 history 干净, 支付宝完成支付 return_url 跳后端 HTML
                       //      3 秒后再 meta refresh 跳回前端 /#/order/{id}, 衔接稳定。
-                      // 跳走前清掉 polling,避免在支付宝里还在每 3s 查后端
-                      if (pollTimerRef.current) {
-                        clearInterval(pollTimerRef.current);
-                        pollTimerRef.current = null;
-                        setPolling(false);
-                      }
+                      // 不要清掉 polling —— 用户从支付宝回来后，queryPaymentStatus 会通过
+                      // alipayQuery 主动查支付宝，并触发 setStep('result') 显示成功
+                      // (即使后端 notify 漏发也能拉到支付结果)
                       const launchUrl = `/api/v1/payments/alipay/launch/${paymentNo}`;
                       window.location.href = launchUrl;
                     }}

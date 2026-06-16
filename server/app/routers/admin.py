@@ -16,6 +16,7 @@ from app.models.models import (
     RDInfo,
     Service,
     Stat,
+    Product,
 )
 from app.schemas.schemas import (
     ApiResponse,
@@ -40,6 +41,7 @@ from app.schemas.schemas import (
     StatUpdate,
     StatOut,
     CompanyInfoData,
+    ProductOut,
 )
 
 router = APIRouter()
@@ -629,3 +631,24 @@ def delete_auditor(
     db.delete(auditor)
     db.commit()
     return ApiResponse(success=True, message=f"已移除 {auditor.user.name} 的审核员权限")
+
+
+# ==================== Products (admin) ====================
+# 后台管理能看到全部产品(含已下架的),并支持按分类过滤
+
+@router.get("/products", response_model=ApiResponse)
+def admin_list_products(
+    category: str | None = None,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_sysadmin),
+):
+    """后台:列出全部产品(含已下架),按分类过滤可选。"""
+    query = db.query(Product)
+    if category:
+        query = query.filter(Product.category == category)
+    products = query.order_by(Product.order.asc(), Product.created_at.desc()).all()
+    return ApiResponse(
+        success=True,
+        data=[ProductOut.model_validate(p) for p in products],
+        message="获取产品列表成功",
+    )
