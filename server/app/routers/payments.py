@@ -13,7 +13,12 @@ from app.dependencies.auth import get_current_user, require_sysadmin
 from app.models.models import (
     Order, PaymentOrder, PaymentGatewayConfig, ReceivableAccount, Bill, User, Voucher
 )
-from app.schemas.schemas import ApiResponse, PaymentCallback, PaymentCreate, PaymentOut
+from app.schemas.schemas import (
+    ApiResponse,
+    # PaymentCallback 已停用(原对应 /payments/callback 后门接口),仅在下方注释代码中引用
+    PaymentCreate,
+    PaymentOut,
+)
 from app.services.alipay_service import (
     create_precreate_order as alipay_create_precreate_order,
     detect_platform,
@@ -347,35 +352,42 @@ def get_payment_status(
     return ApiResponse(success=True, data=PaymentOut.model_validate(payment))
 
 
-@router.post("/callback", response_model=ApiResponse)
-def payment_callback(payload: PaymentCallback, db: Session = Depends(get_db)):
-    payment = db.query(PaymentOrder).filter(PaymentOrder.payment_no == payload.payment_no).first()
-    if not payment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="支付订单不存在")
-
-    now = datetime.now(timezone.utc)
-    payment.status = PaymentStatus.PAID
-    payment.paid_at = now
-
-    order = payment.order
-    order.status = OrderStatus.PAID
-    order.payment_time = now
-
-    bill = Bill(
-        user_id=order.user_id,
-        order_id=order.id,
-        order_no=order.order_no,
-        type=BillType.EXPENSE,
-        amount=payment.amount,
-        payment_method=payment.payment_method,
-        description=f"订单 {order.order_no} 支付",
-        status=BillStatus.SUCCESS,
-    )
-    db.add(bill)
-    db.commit()
-    db.refresh(payment)
-
-    return ApiResponse(success=True, data=PaymentOut.model_validate(payment), message="支付回调处理成功")
+# ⚠️ 安全修复:注释 /payments/callback 后门接口(2026-06-16)
+# 原接口无鉴权、无签名验证,任何人拿到 paymentNo 都能伪造支付成功 → 严重资损风险
+# 支付状态更新只能由支付宝/微信异步通知接口(/payments/alipay/notify)处理,且需通过签名验证
+#
+# 注释掉的原代码如下,如有疑问可对比下方支付宝 notify 接口的实现:
+#
+# @router.post("/callback", response_model=ApiResponse)
+# def payment_callback(payload, db: Session = Depends(get_db)):  # 原签名用 PaymentCallback,已停用
+#     """⚠️ 已禁用:此接口无鉴权,任何人可伪造支付成功,属于严重安全漏洞"""
+#     payment = db.query(PaymentOrder).filter(PaymentOrder.payment_no == payload.payment_no).first()
+#     if not payment:
+#         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="支付订单不存在")
+#
+#     now = datetime.now(timezone.utc)
+#     payment.status = PaymentStatus.PAID
+#     payment.paid_at = now
+#
+#     order = payment.order
+#     order.status = OrderStatus.PAID
+#     order.payment_time = now
+#
+#     bill = Bill(
+#         user_id=order.user_id,
+#         order_id=order.id,
+#         order_no=order.order_no,
+#         type=BillType.EXPENSE,
+#         amount=payment.amount,
+#         payment_method=payment.payment_method,
+#         description=f"订单 {order.order_no} 支付",
+#         status=BillStatus.SUCCESS,
+#     )
+#     db.add(bill)
+#     db.commit()
+#     db.refresh(payment)
+#
+#     return ApiResponse(success=True, data=PaymentOut.model_validate(payment), message="支付回调处理成功")
 
 
 @router.get("/methods", response_model=ApiResponse)

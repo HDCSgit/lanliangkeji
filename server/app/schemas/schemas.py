@@ -467,9 +467,14 @@ class PaymentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PaymentCallback(BaseModel):
-    payment_no: str
-    status: str
+# ⚠️ 安全修复:PaymentCallback schema 已停用(2026-06-16)
+# 原对应 /payments/callback 后门接口,无鉴权可伪造支付成功,已注释掉
+# 真实的支付回调走支付宝/微信异步通知接口,带签名验证
+# 此处保留 schema 定义仅供代码审查对比
+#
+# class PaymentCallback(BaseModel):
+#     payment_no: str
+#     status: str
 
 
 # ==================== Voucher ====================

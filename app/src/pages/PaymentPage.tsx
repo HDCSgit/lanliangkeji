@@ -203,14 +203,6 @@ const PaymentPage: React.FC = () => {
     setIsLoading(false);
   };
 
-  // 模拟支付成功（测试用 - 微信/支付宝）
-  const handleSimulatePayment = async () => {
-    if (!paymentNo) return;
-    setIsLoading(true);
-    await PaymentAPI.handleCallback(paymentNo);
-    setIsLoading(false);
-  };
-
   // 上传凭证截图
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -497,18 +489,6 @@ const PaymentPage: React.FC = () => {
                   等待支付结果...
                 </div>
               )}
-
-              {/* 模拟支付按钮（测试用） */}
-              <div className="mt-6 pt-4 border-t">
-                <p className="text-xs text-gray-400 mb-2">测试环境 - 模拟支付</p>
-                <button
-                  onClick={handleSimulatePayment}
-                  disabled={isLoading}
-                  className="px-6 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-                >
-                  {isLoading ? '处理中...' : '模拟支付成功'}
-                </button>
-              </div>
             </div>
           </>
         )}

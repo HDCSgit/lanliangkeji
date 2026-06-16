@@ -148,11 +148,9 @@ export const PaymentOrderStore = {
     return null;
   },
 
-  async updateStatus(paymentNo: string, status: PaymentOrder['status']): Promise<void> {
-    if (status === 'paid') {
-      await paymentApi.callback({ paymentNo, status: 'success' });
-    }
-  },
+  // ⚠️ 安全修复:移除 PaymentOrderStore.updateStatus
+  // 原实现调 paymentApi.callback() 把订单 mark as paid,这就是"模拟支付"后门
+  // 支付状态必须由支付宝/微信异步通知接口更新,前端不能主动 mark as paid
 
   generatePaymentNo(): string {
     return '';
@@ -329,13 +327,7 @@ export const PaymentAPI = {
     }
   },
 
-  // 处理支付回调（微信支付/支付宝用）
-  async handleCallback(paymentNo: string): Promise<boolean> {
-    try {
-      await paymentApi.callback({ paymentNo, status: 'success' });
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  // ⚠️ 安全修复:移除前端 handleCallback 调用入口
+  // 支付宝/微信的支付结果必须由支付平台异步回调后端,前端不能直接 mark as paid
+  // 否则任何拿到 paymentNo 的人都能伪造支付成功
 };
