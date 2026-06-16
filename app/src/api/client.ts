@@ -42,6 +42,13 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    // FormData 时清掉 Content-Type,让 axios 自动算 multipart/form-data + boundary
+    // 否则全局默认 'application/json' 会让后端解析不到 image 字段
+    if (config.data instanceof FormData && config.headers) {
+      delete (config.headers as any)['Content-Type'];
+      delete (config.headers as any)['content-type'];
+    }
+
     if (
       config.data &&
       typeof config.data === 'object' &&

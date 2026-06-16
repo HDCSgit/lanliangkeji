@@ -1040,6 +1040,7 @@ export const DataStore = {
     formData.append('image', file);
     formData.append('kind', kind);
     if (position !== undefined) formData.append('position', String(position));
+    // client.ts 拦截器会自动清掉全局默认的 Content-Type,让 axios 自己算 multipart boundary
     const data = await apiPost<{
       id: string;
       image: string;
