@@ -19,17 +19,18 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 # 缩略图尺寸配置(单位 px)
-# - thumb: 列表卡片用,通常 320x320 足够
-# - medium: 详情页主图,800x800
-# - large: 详情页大图原图,最大 1600x1600(超过按比例缩)
+# 平衡清晰度和带宽(用户反馈:列表≤100KB,详情≤300KB,详情大图≤1MB)
+# - thumb: 列表卡片/首页产品卡 (目标 ≤100KB)
+# - medium: 详情页主图/轮播 (目标 ≤300KB)
+# - large: 详情页详情图 (目标 ≤1MB)
 IMAGE_SIZES = {
-    "thumb": (320, 320),    # 列表卡片/首页产品卡 (1-3 KB)
-    "medium": (800, 800),   # 详情页主图 (10-30 KB)
-    "large": (1600, 1600),  # 详情页大图/详情图 (50-150 KB)
+    "thumb": (640, 640),     # 列表卡片/首页产品卡 - 2 倍 DPI 清晰,目标 ≤100KB
+    "medium": (1200, 1200),  # 详情页主图/轮播 - 视网膜屏也清晰,目标 ≤300KB
+    "large": (2000, 2000),   # 详情页详情图 - 高清细节,目标 ≤1MB
 }
 
-# WebP 质量(0-100,75 是肉眼无明显损失的好平衡点)
-WEBP_QUALITY = 75
+# WebP 质量(0-100,88 是"看不出压缩痕迹"的好平衡点)
+WEBP_QUALITY = 88
 
 
 def get_storage_config(db: Session) -> StorageConfig:
