@@ -1,5 +1,6 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -17,9 +18,11 @@ from app.models.models import (
     Service,
     Stat,
     Product,
+    PaymentGatewayConfig,
 )
 from app.schemas.schemas import (
     ApiResponse,
+    BankTransferConfig,
     SiteConfigData,
     BannerCreate,
     BannerUpdate,
@@ -652,3 +655,114 @@ def admin_list_products(
         data=[ProductOut.model_validate(p) for p in products],
         message="获取产品列表成功",
     )
+
+
+# ==================== Payment Gateway Config ====================
+#
+# 安全设计:
+# - 支付密钥(私钥/API Key/证书) 只在 .env / KMS,前端永远拿不到真值
+# - DB 只存非敏感配置(enabled 开关、回调 URL、对公转账账户)
+# - 前端可读脱敏后的状态(是否已配置 + 脱敏后的 app_id),不可读密钥
+# - 启用开关通过 DB 控制,这样可以远程开关支付方式
+# - 真要用密钥支付时,代码从 settings 直接读 .env
+
+
+def _mask(s: str, head: int = 4, tail: int = 2) -> str:
+    """脱敏:前 4 后 2"""
+    if not s:
+        return ""
+    if len(s) <= head + tail:
+        return "*" * len(s)
+    return f"{s[:head]}{'*' * (len(s) - head - tail)}{s[-tail:]}"
+
+
+def _status_for_secret(secret: str) -> str:
+    """返回 '已配置' 或 '未配置',不返回密钥本身"""
+    return "已配置" if secret else "未配置"
+
+
+@router.get("/payment-gateway", response_model=ApiResponse)
+def get_payment_gateway_config(
+    _user: User = Depends(require_auditor_or_admin),
+    db: Session = Depends(get_db),
+):
+    """后台:获取支付配置状态(脱敏)
+
+    返回字段:
+      - enabled: 启用开关(来自 DB,可远程控制)
+      - app_id: 脱敏后的 app_id(只读 .env,前端可见)
+      - private_key / api_key / public_key: '已配置'/'未配置'(不返回真值)
+      - notify_url: 回调地址(可在 DB 覆盖 .env)
+    """
+    cfg = db.query(PaymentGatewayConfig).first()
+
+    # 读 .env 真实值(只在这里读一次,绝不返回前端)
+    try:
+        from app.core.config import settings
+        alipay_app_id = settings.ALIPAY_APP_ID or ""
+        alipay_private_key = settings.ALIPAY_APP_PRIVATE_KEY or ""
+        alipay_public_key = settings.ALIPAY_ALIPAY_PUBLIC_KEY or ""
+        alipay_notify_url = settings.ALIPAY_NOTIFY_URL or ""
+    except Exception:
+        alipay_app_id = alipay_private_key = alipay_public_key = alipay_notify_url = ""
+
+    # 读 DB 的开关 + 回调 URL(可被管理员覆盖)
+    if cfg and cfg.alipay:
+        alipay_enabled = cfg.alipay.get("enabled", False)
+        alipay_notify_url_db = cfg.alipay.get("notify_url", "") or ""
+        final_notify_url = alipay_notify_url_db or alipay_notify_url
+    else:
+        alipay_enabled = False
+        final_notify_url = alipay_notify_url
+
+    return ApiResponse(success=True, data={
+        "wechat_pay": {
+            "enabled": (cfg.wechat_pay.get("enabled", False) if cfg and cfg.wechat_pay else False),
+            "mch_id": _mask(""),  # 微信支付未配 env,这里给空即可
+            "app_id": _mask(""),
+            "api_key": _status_for_secret(""),
+            "notify_url": (cfg.wechat_pay.get("notify_url", "") if cfg and cfg.wechat_pay else ""),
+        },
+        "alipay": {
+            "enabled": alipay_enabled,
+            "app_id": _mask(alipay_app_id),
+            "private_key": _status_for_secret(alipay_private_key),
+            "public_key": _status_for_secret(alipay_public_key),
+            "notify_url": final_notify_url,
+        },
+        "bank_transfer": {
+            "enabled": (cfg.bank_transfer.get("enabled", True) if cfg and cfg.bank_transfer else True),
+            "account_name": (cfg.bank_transfer.get("account_name", "福州蓝粮海洋生物科技有限公司") if cfg and cfg.bank_transfer else "福州蓝粮海洋生物科技有限公司"),
+            "bank_name": (cfg.bank_transfer.get("bank_name", "中国工商银行福州马尾支行") if cfg and cfg.bank_transfer else "中国工商银行福州马尾支行"),
+            "account_number": (cfg.bank_transfer.get("account_number", "") if cfg and cfg.bank_transfer else ""),
+        },
+    })
+
+
+# ⚠️ 安全设计:
+# - 支付密钥(私钥/API Key) 永远只在 .env,前端拿不到真值
+# - 支付宝/微信启用开关 在 .env (改 env + 重启生效),前端显示但不能改
+# - 对公转账账户信息(开户名/开户行/账号) 在 DB 可改(运营场景,不算敏感)
+#   且前端页面允许编辑保存
+
+@router.put("/payment-gateway/bank-transfer", response_model=ApiResponse)
+def update_bank_transfer(
+    data: BankTransferConfig,
+    _user: User = Depends(require_auditor_or_admin),
+    db: Session = Depends(get_db),
+):
+    """后台:更新对公转账账户信息(非敏感,允许后台编辑)"""
+    cfg = db.query(PaymentGatewayConfig).first()
+    if not cfg:
+        cfg = PaymentGatewayConfig(
+            wechat_pay={"enabled": False, "mch_id": "", "app_id": "", "api_key": "", "notify_url": ""},
+            alipay={"enabled": False, "app_id": "", "private_key": "", "public_key": "", "notify_url": ""},
+            bank_transfer=data.model_dump(),
+            updated_by=_user.id,
+        )
+        db.add(cfg)
+    else:
+        cfg.bank_transfer = data.model_dump()
+        cfg.updated_by = _user.id
+    db.commit()
+    return ApiResponse(success=True, message="对公转账账户已更新")

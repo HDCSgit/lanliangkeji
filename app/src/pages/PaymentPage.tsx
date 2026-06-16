@@ -179,10 +179,12 @@ const PaymentPage: React.FC = () => {
       if (paymentMethod === 'bank_transfer') {
         setStep('upload');
         if (result.receivableAccount) {
+          // 注意:axios response interceptor 已经把整个 response.data snake→camel 了
+          // 所以这里要读 camelCase 字段
           setReceivableAccount({
-            accountName: result.receivableAccount.account_name,
-            bankName: result.receivableAccount.bank_name,
-            accountNumber: result.receivableAccount.account_number,
+            accountName: result.receivableAccount.accountName,
+            bankName: result.receivableAccount.bankName,
+            accountNumber: result.receivableAccount.accountNumber,
           });
         }
       } else {
