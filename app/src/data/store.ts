@@ -932,6 +932,21 @@ export const DataStore = {
     }
   },
 
+  /**
+   * 直接创建一个产品(不走 setProducts 的 diff 逻辑),返回后端的 ProductOut
+   * 用于"新建模式下创建空产品后立即拿到 id,再去上传图片"的流程
+   */
+  async createProduct(payload: any): Promise<Product> {
+    try {
+      // apiPost 已自动解 ApiResponse.data
+      const out = await apiPost<Product>('/products/', payload);
+      return out;
+    } catch (error) {
+      console.error('Failed to create product:', error);
+      throw error;
+    }
+  },
+
   async setProducts(products: Product[]): Promise<void> {
     try {
       // 后端没有批量保存接口，逐个创建/更新
