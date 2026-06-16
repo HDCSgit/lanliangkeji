@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-// 注意:ProductSpec.price/stock 类型是 number,但表单输入允许空字符串
-// 用 Partial<ProductSpec> + as any 在表单编辑时使用,提交前再 normalize
 import {
   Plus, Edit2, Trash2, Eye, EyeOff, Search,
-  ImageIcon, X, Package
+  ImageIcon, X, Package, Upload, GripVertical, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { DataStore } from '@/data/store';
 import type { Product, ProductSpec } from '@/types';
@@ -15,8 +13,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import ProductImage from '@/components/ProductImage';
 
 const CATEGORIES = ['海洋生物制品', '水产深加工', '健康食材', '原料供应'];
+const MAX_COVER_IMAGES = 5;
 
 const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -25,7 +26,6 @@ const AdminProducts: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   // 基础字段
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -34,16 +34,17 @@ const AdminProducts: React.FC = () => {
     description: '',
     image: '',
     isActive: true,
+    coverImages: [],
+    detailImages: [],
+    enableCarousel: false,
   });
 
-  // 规格(表格化)
+  // 规格
   const [specs, setSpecs] = useState<ProductSpec[]>([]);
 
   // 产品特点
   const [features, setFeatures] = useState<string[]>([]);
   const [featureInput, setFeatureInput] = useState('');
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadProducts();
@@ -76,11 +77,13 @@ const AdminProducts: React.FC = () => {
       description: '',
       image: '',
       isActive: true,
+      coverImages: [],
+      detailImages: [],
+      enableCarousel: false,
     });
     setSpecs([]);
     setFeatures([]);
     setFeatureInput('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const openEditDialog = (product: Product) => {
@@ -91,11 +94,13 @@ const AdminProducts: React.FC = () => {
       description: product.description,
       image: product.image,
       isActive: product.isActive,
+      coverImages: product.coverImages || (product.image ? [product.image] : []),
+      detailImages: product.detailImages || [],
+      enableCarousel: !!product.enableCarousel,
     });
     setSpecs(product.specs || []);
     setFeatures(product.features || []);
     setFeatureInput('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
     setIsDialogOpen(true);
   };
 
@@ -141,57 +146,138 @@ const AdminProducts: React.FC = () => {
     setFeatures((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ---- 图片上传 ----
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('请选择图片文件');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('图片大小不能超过 10MB');
-      return;
-    }
-    if (!editingProduct) {
-      // 新建模式:先转 base64 显示,等创建后真正保存图片(创建后拿到 productId 再上传)
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setFormData((prev) => ({ ...prev, image: ev.target?.result as string }));
-      };
-      reader.readAsDataURL(file);
-      return;
-    }
-    // 编辑模式:直接上传
-    await uploadImageNow(file, editingProduct.id);
+  // ---- 封面图操作 ----
+  const moveCover = (index: number, direction: -1 | 1) => {
+    setFormData((prev) => {
+      const arr = [...(prev.coverImages || [])];
+      const target = index + direction;
+      if (target < 0 || target >= arr.length) return prev;
+      [arr[index], arr[target]] = [arr[target], arr[index]];
+      return { ...prev, coverImages: arr };
+    });
+  };
+  const removeCover = (index: number) => {
+    setFormData((prev) => {
+      const arr = [...(prev.coverImages || [])];
+      arr.splice(index, 1);
+      // 删除后,如果 ≤1 张,强制不轮播
+      const enableCarousel = (prev.enableCarousel ?? false) && arr.length >= 2;
+      return { ...prev, coverImages: arr, enableCarousel };
+    });
   };
 
-  const uploadImageNow = async (file: File, productId: string) => {
-    setUploading(true);
+  // ---- 详情图操作 ----
+  const moveDetail = (index: number, direction: -1 | 1) => {
+    setFormData((prev) => {
+      const arr = [...(prev.detailImages || [])];
+      const target = index + direction;
+      if (target < 0 || target >= arr.length) return prev;
+      [arr[index], arr[target]] = [arr[target], arr[index]];
+      return { ...prev, detailImages: arr };
+    });
+  };
+  const removeDetail = (index: number) => {
+    setFormData((prev) => {
+      const arr = [...(prev.detailImages || [])];
+      arr.splice(index, 1);
+      return { ...prev, detailImages: arr };
+    });
+  };
+
+  // ---- 图片上传 ----
+  const handleCoverUpload = async (file: File) => {
+    if (!editingProduct) {
+      alert('请先保存产品基本信息,创建产品后再上传封面图');
+      return;
+    }
     try {
-      const formData = new FormData();
-      formData.append('image', file);
-      const resp = await fetch(`/api/v1/products/${productId}/image`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('lanliang_access_token') || ''}`,
-        },
-      });
-      const json = await resp.json();
-      if (!json.success) {
-        alert('图片上传失败: ' + (json.error || json.detail || json.message || '未知错误'));
-        return;
-      }
-      const newPath = json.data?.image || json.data?.product?.image;
-      if (newPath) {
-        setFormData((prev) => ({ ...prev, image: newPath }));
-      }
+      const position = (formData.coverImages?.length ?? 0);
+      const r = await DataStore.uploadProductImage(editingProduct.id, file, 'cover', position);
+      // 同步本地 form 状态
+      setFormData((prev) => ({
+        ...prev,
+        coverImages: r.coverImages,
+        image: r.coverImages[0] || prev.image,
+        enableCarousel: (prev.enableCarousel ?? false) && r.coverImages.length >= 2 ? prev.enableCarousel : (r.coverImages.length >= 2 ? prev.enableCarousel : false),
+      }));
       await loadProducts();
-    } catch (err: any) {
-      alert('图片上传失败: ' + (err?.message || err));
-    } finally {
-      setUploading(false);
+    } catch (e: any) {
+      alert('封面图上传失败: ' + (e?.message || e));
+    }
+  };
+
+  const handleDetailUpload = async (file: File) => {
+    if (!editingProduct) {
+      alert('请先保存产品基本信息,创建产品后再上传详情图');
+      return;
+    }
+    try {
+      const r = await DataStore.uploadProductImage(editingProduct.id, file, 'detail');
+      setFormData((prev) => ({
+        ...prev,
+        detailImages: r.detailImages,
+      }));
+      await loadProducts();
+    } catch (e: any) {
+      alert('详情图上传失败: ' + (e?.message || e));
+    }
+  };
+
+  const handleRemoveCoverServer = async (url: string) => {
+    if (!editingProduct) {
+      // 本地态(还没保存),直接本地删
+      const idx = (formData.coverImages || []).indexOf(url);
+      if (idx >= 0) removeCover(idx);
+      return;
+    }
+    if (!confirm('确定要删除这张封面图吗?')) return;
+    try {
+      const r = await DataStore.removeProductImage(editingProduct.id, url, 'cover');
+      setFormData((prev) => ({ ...prev, coverImages: r.coverImages, image: r.coverImages[0] || '', enableCarousel: (prev.enableCarousel ?? false) && r.coverImages.length >= 2 }));
+      await loadProducts();
+    } catch (e: any) {
+      alert('删除失败: ' + (e?.message || e));
+    }
+  };
+
+  const handleRemoveDetailServer = async (url: string) => {
+    if (!editingProduct) {
+      const idx = (formData.detailImages || []).indexOf(url);
+      if (idx >= 0) removeDetail(idx);
+      return;
+    }
+    if (!confirm('确定要删除这张详情图吗?')) return;
+    try {
+      const r = await DataStore.removeProductImage(editingProduct.id, url, 'detail');
+      setFormData((prev) => ({ ...prev, detailImages: r.detailImages }));
+      await loadProducts();
+    } catch (e: any) {
+      alert('删除失败: ' + (e?.message || e));
+    }
+  };
+
+  // ---- 轮播切换 ----
+  const handleToggleCarousel = async (next: boolean) => {
+    // 本地态先反馈
+    setFormData((prev) => ({ ...prev, enableCarousel: next && (prev.coverImages?.length ?? 0) >= 2 }));
+    if (!editingProduct) return;
+    try {
+      const r = await DataStore.toggleProductCarousel(editingProduct.id, next);
+      setFormData((prev) => ({ ...prev, enableCarousel: r.enableCarousel }));
+      await loadProducts();
+    } catch (e: any) {
+      alert('切换轮播失败: ' + (e?.message || e));
+    }
+  };
+
+  // ---- 上架切换 ----
+  const handleToggleActive = async (id: string, next: boolean) => {
+    const updated = products.map((p) => (p.id === id ? { ...p, isActive: next } : p));
+    try {
+      await DataStore.setProducts(updated);
+      await loadProducts();
+    } catch (e: any) {
+      alert('切换上架失败: ' + (e?.message || e));
     }
   };
 
@@ -199,6 +285,10 @@ const AdminProducts: React.FC = () => {
   const handleSave = async () => {
     if (!formData.name?.trim()) {
       alert('请输入产品名称');
+      return;
+    }
+    if ((formData.coverImages?.length ?? 0) === 0) {
+      alert('请至少上传 1 张封面图');
       return;
     }
     if (specs.length === 0) {
@@ -226,6 +316,7 @@ const AdminProducts: React.FC = () => {
     try {
       const payload = {
         ...formData,
+        image: formData.coverImages?.[0] ?? formData.image ?? '',
         specs,
         features,
       };
@@ -235,13 +326,15 @@ const AdminProducts: React.FC = () => {
         );
         await DataStore.setProducts(updated);
       } else {
-        // 新建:ID 由后端生成,但当前是 localStorage 模式
         const newProduct: Product = {
           id: `p-${Date.now()}`,
           name: formData.name!,
           category: formData.category || CATEGORIES[0],
           description: formData.description || '',
-          image: formData.image || '',
+          image: formData.coverImages?.[0] ?? '',
+          coverImages: formData.coverImages || [],
+          detailImages: formData.detailImages || [],
+          enableCarousel: !!(formData.enableCarousel && (formData.coverImages?.length ?? 0) >= 2),
           specs,
           features,
           isActive: formData.isActive ?? true,
@@ -263,14 +356,12 @@ const AdminProducts: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!confirm('确定要删除这个产品吗?删除后无法恢复')) return;
     const updated = products.filter((p) => p.id !== id);
-    await DataStore.setProducts(updated);
-    await loadProducts();
-  };
-
-  const handleToggleActive = async (id: string) => {
-    const updated = products.map((p) => (p.id === id ? { ...p, isActive: !p.isActive } : p));
-    await DataStore.setProducts(updated);
-    await loadProducts();
+    try {
+      await DataStore.setProducts(updated);
+      await loadProducts();
+    } catch (e: any) {
+      alert('删除失败: ' + (e?.message || e));
+    }
   };
 
   // 价格汇总
@@ -290,7 +381,7 @@ const AdminProducts: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ocean-deep">产品管理</h1>
-          <p className="text-gray-500">管理产品信息、规格、图片、库存</p>
+          <p className="text-gray-500">管理产品信息、封面图、详情图、规格、库存</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -314,39 +405,42 @@ const AdminProducts: React.FC = () => {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredProducts.map((product) => (
           <div key={product.id} className="bg-white rounded-2xl shadow-card overflow-hidden group">
-            <div className="relative h-40 overflow-hidden bg-gray-100">
-              {product.image ? (
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-300">
-                  <ImageIcon className="w-12 h-12" />
-                </div>
-              )}
-              <div className="absolute top-2 right-2 flex gap-1">
-                <button
-                  onClick={() => handleToggleActive(product.id)}
-                  className={`p-2 rounded-lg ${
-                    product.isActive ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'
-                  }`}
-                  title={product.isActive ? '已上架' : '已下架'}
-                >
-                  {product.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </button>
-              </div>
+            <div className="relative h-40">
+              <ProductImage
+                src={product.coverImages?.[0] || product.image}
+                alt={product.name}
+                className="w-full h-full"
+                imgClassName="group-hover:scale-110 transition-transform duration-500"
+                aspectRatio="4/3"
+                sizeHint="thumb"
+              />
             </div>
             <div className="p-4">
-              <span className="text-xs text-ocean-blue bg-ocean-blue/10 px-2 py-1 rounded-full">
-                {product.category}
-              </span>
-              <h3 className="font-bold text-ocean-deep mt-2 mb-1 line-clamp-1">{product.name}</h3>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <span className="text-xs text-ocean-blue bg-ocean-blue/10 px-2 py-1 rounded-full shrink-0">
+                  {product.category}
+                </span>
+                {/* 列表卡片上的上架 toggle - 好看动画 */}
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-medium ${product.isActive ? 'text-green-600' : 'text-gray-400'}`}>
+                    {product.isActive ? '已上架' : '已下架'}
+                  </span>
+                  <Switch
+                    checked={product.isActive}
+                    onCheckedChange={(next) => handleToggleActive(product.id, next)}
+                    className="data-[state=checked]:bg-green-500 scale-90 transition-all duration-300"
+                  />
+                </div>
+              </div>
+              <h3 className="font-bold text-ocean-deep mb-1 line-clamp-1">{product.name}</h3>
               <p className="text-sm text-gray-500 line-clamp-2 mb-2 h-10">{product.description}</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                <span>封面图 {(product.coverImages?.length ?? 0)}/{MAX_COVER_IMAGES}</span>
+                <span>·</span>
+                <span>详情图 {product.detailImages?.length ?? 0}</span>
+                <span>·</span>
+                <span>轮播 {product.enableCarousel && (product.coverImages?.length ?? 0) >= 2 ? '开' : '关'}</span>
+              </div>
               <div className="text-sm flex items-center justify-between text-gray-700 border-t pt-2">
                 <span>价格: <span className="font-medium text-ocean-blue">{priceRange(product)}</span></span>
                 <span>库存: <span className="font-medium">{totalStock(product)}</span></span>
@@ -431,62 +525,27 @@ const AdminProducts: React.FC = () => {
               </div>
             </section>
 
-            {/* ===== 区块 2: 产品图片 ===== */}
-            <section>
-              <h3 className="text-sm font-bold text-ocean-deep mb-3 flex items-center gap-2">
-                <ImageIcon className="w-4 h-4" /> 产品图片
-              </h3>
-              <div className="flex gap-4 items-start">
-                <div className="w-40 h-40 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
-                  {formData.image ? (
-                    <img
-                      src={formData.image}
-                      alt="预览"
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <div className="text-center text-gray-400 text-sm">
-                      <ImageIcon className="w-8 h-8 mx-auto mb-1" />
-                      暂无图片
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    disabled={uploading}
-                    className="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-ocean-blue file:text-white hover:file:bg-ocean-deep cursor-pointer"
-                  />
-                  <p className="text-xs text-gray-400">
-                    支持 JPG / PNG / WebP,最大 10MB。
-                    {editingProduct
-                      ? '新图片会立即上传并替换现有图片。'
-                      : '新建产品时,图片先预览,创建产品后会自动同步保存。'}
-                  </p>
-                  {uploading && (
-                    <p className="text-xs text-ocean-blue">上传中…</p>
-                  )}
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">或直接填写图片URL</label>
-                    <input
-                      type="text"
-                      value={formData.image?.startsWith('data:') ? '' : formData.image || ''}
-                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:border-ocean-blue focus:outline-none"
-                      placeholder="/uploads/products/xxx.png 或 https://..."
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
+            {/* ===== 区块 2: 封面图管理 (1-5 张) ===== */}
+            <CoverImagesSection
+              coverImages={formData.coverImages || []}
+              canUpload={!!editingProduct}
+              onUpload={handleCoverUpload}
+              onRemove={handleRemoveCoverServer}
+              onMoveUp={(idx) => moveCover(idx, -1)}
+              onMoveDown={(idx) => moveCover(idx, 1)}
+            />
 
-            {/* ===== 区块 3: 规格库存 ===== */}
+            {/* ===== 区块 3: 详情图管理 (0-N 张) ===== */}
+            <DetailImagesSection
+              detailImages={formData.detailImages || []}
+              canUpload={!!editingProduct}
+              onUpload={handleDetailUpload}
+              onRemove={handleRemoveDetailServer}
+              onMoveUp={(idx) => moveDetail(idx, -1)}
+              onMoveDown={(idx) => moveDetail(idx, 1)}
+            />
+
+            {/* ===== 区块 4: 规格库存 ===== */}
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-ocean-deep flex items-center gap-2">
@@ -543,7 +602,6 @@ const AdminProducts: React.FC = () => {
                               value={spec.price === null || spec.price === undefined ? '' : String(spec.price)}
                               onChange={(e) => {
                                 const v = e.target.value;
-                                // 允许空字符串 + 数字 + 小数点
                                 if (v === '' || /^\d*\.?\d*$/.test(v)) {
                                   updateSpec(index, { price: v === '' ? null : (parseFloat(v) as any) } as any);
                                 }
@@ -559,7 +617,6 @@ const AdminProducts: React.FC = () => {
                               value={spec.stock === null || spec.stock === undefined ? '' : String(spec.stock)}
                               onChange={(e) => {
                                 const v = e.target.value;
-                                // 允许空字符串 + 整数
                                 if (v === '' || /^\d*$/.test(v)) {
                                   updateSpec(index, { stock: v === '' ? null : (parseInt(v, 10) as any) } as any);
                                 }
@@ -601,7 +658,7 @@ const AdminProducts: React.FC = () => {
               )}
             </section>
 
-            {/* ===== 区块 4: 产品特点 ===== */}
+            {/* ===== 区块 5: 产品特点 ===== */}
             <section>
               <h3 className="text-sm font-bold text-ocean-deep mb-3">产品特点</h3>
               <div className="flex gap-2 mb-2">
@@ -643,23 +700,40 @@ const AdminProducts: React.FC = () => {
               )}
             </section>
 
-            {/* ===== 区块 5: 显示设置 ===== */}
-            <section className="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-lg">
-              <div>
-                <p className="text-sm font-medium text-gray-800">上架显示</p>
-                <p className="text-xs text-gray-500">关闭后产品不会在前台展示</p>
-              </div>
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.isActive ?? true}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="relative w-11 h-6 bg-gray-200 peer-checked:bg-ocean-blue rounded-full transition-colors">
-                  <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5" />
+            {/* ===== 区块 6: 显示设置 (上架/轮播 toggle) ===== */}
+            <section className="space-y-3">
+              {/* 上架 toggle */}
+              <div className="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">上架显示</p>
+                  <p className="text-xs text-gray-500">关闭后产品不会在前台展示</p>
                 </div>
-              </label>
+                <ToggleRow
+                  checked={!!formData.isActive}
+                  onChange={(v) => setFormData({ ...formData, isActive: v })}
+                  onLabel="已上架"
+                  offLabel="已下架"
+                />
+              </div>
+
+              {/* 轮播 toggle */}
+              <div className="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">封面图轮播</p>
+                  <p className="text-xs text-gray-500">
+                    {(formData.coverImages?.length ?? 0) >= 2
+                      ? '详情页顶部会自动切换多张封面图'
+                      : '需要至少 2 张封面图才能启用轮播'}
+                  </p>
+                </div>
+                <ToggleRow
+                  checked={!!formData.enableCarousel && (formData.coverImages?.length ?? 0) >= 2}
+                  onChange={handleToggleCarousel}
+                  disabled={(formData.coverImages?.length ?? 0) < 2}
+                  onLabel="已开启"
+                  offLabel="已关闭"
+                />
+              </div>
             </section>
           </div>
 
@@ -678,6 +752,346 @@ const AdminProducts: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
+  );
+};
+
+// ==================== 复用子组件 ====================
+
+interface ToggleRowProps {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  onLabel?: string;
+  offLabel?: string;
+  disabled?: boolean;
+}
+
+/**
+ * 好看动画的 toggle 开关:
+ * - 蓝色 → 灰色 时滑块有 200ms 平滑过渡
+ * - 轨道颜色变化 300ms
+ * - 状态文字 200ms 渐变
+ */
+const ToggleRow: React.FC<ToggleRowProps> = ({ checked, onChange, onLabel = '开', offLabel = '关', disabled }) => {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`text-xs font-medium transition-all duration-200 ${
+          disabled
+            ? 'text-gray-300'
+            : checked
+              ? 'text-ocean-blue'
+              : 'text-gray-400'
+        }`}
+      >
+        {checked ? onLabel : offLabel}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={`
+          relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full
+          border-2 border-transparent transition-colors duration-300 ease-in-out
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-blue focus-visible:ring-offset-2
+          disabled:cursor-not-allowed disabled:opacity-50
+          ${checked ? 'bg-ocean-blue shadow-[0_0_12px_rgba(22,93,255,0.4)]' : 'bg-gray-300'}
+        `}
+      >
+        <span
+          className={`
+            pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0
+            transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+            ${checked ? 'translate-x-5' : 'translate-x-0'}
+          `}
+        />
+      </button>
+    </div>
+  );
+};
+
+interface CoverImagesSectionProps {
+  coverImages: string[];
+  canUpload: boolean;
+  onUpload: (file: File) => void;
+  onRemove: (url: string) => void;
+  onMoveUp: (index: number) => void;
+  onMoveDown: (index: number) => void;
+}
+
+/**
+ * 封面图管理(1-5 张)
+ * - 第一张作为产品主图(列表/卡片显示)
+ * - 上传/拖拽排序/删除
+ * - 第一张不可上移,最后一张不可下移
+ */
+const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
+  coverImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown,
+}) => {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('图片大小不能超过 10MB');
+      return;
+    }
+    onUpload(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-ocean-deep flex items-center gap-2">
+          <ImageIcon className="w-4 h-4" /> 封面图
+          <span className="text-xs text-gray-400 font-normal">
+            ({coverImages.length}/{MAX_COVER_IMAGES} 张,首张为主图)
+          </span>
+        </h3>
+        {canUpload && coverImages.length < MAX_COVER_IMAGES && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="w-3 h-3 mr-1" /> 上传封面图
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFile}
+              className="hidden"
+            />
+          </>
+        )}
+      </div>
+
+      {coverImages.length === 0 ? (
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center bg-gray-50">
+          <ImageIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+          <p className="text-sm text-gray-500 mb-2">
+            至少上传 1 张封面图(建议 800×800 以上)
+          </p>
+          {!canUpload && (
+            <p className="text-xs text-gray-400">
+              请先创建并保存产品基本信息,再回来上传封面图
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {coverImages.map((url, idx) => (
+            <div
+              key={url}
+              className="relative group rounded-lg overflow-hidden border-2 border-transparent hover:border-ocean-blue transition-colors aspect-square bg-gray-100"
+            >
+              <ProductImage
+                src={url}
+                alt={`封面图 ${idx + 1}`}
+                aspectRatio="1/1"
+                className="w-full h-full"
+                priority
+              />
+              {/* 主图标签 */}
+              {idx === 0 && (
+                <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-ocean-blue text-white text-[10px] rounded">
+                  主图
+                </span>
+              )}
+              {/* 操作按钮 */}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                {idx > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onMoveUp(idx)}
+                    className="p-1.5 bg-white rounded-full text-gray-700 hover:bg-ocean-blue hover:text-white"
+                    title="上移"
+                  >
+                    <ChevronUp className="w-3 h-3" />
+                  </button>
+                )}
+                {idx < coverImages.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onMoveDown(idx)}
+                    className="p-1.5 bg-white rounded-full text-gray-700 hover:bg-ocean-blue hover:text-white"
+                    title="下移"
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(url)}
+                  className="p-1.5 bg-white rounded-full text-red-500 hover:bg-red-500 hover:text-white"
+                  title="删除"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {/* 占位:还能上传几张 */}
+          {canUpload && coverImages.length < MAX_COVER_IMAGES && (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-ocean-blue hover:bg-ocean-blue/5 transition-colors flex flex-col items-center justify-center text-gray-400 hover:text-ocean-blue"
+            >
+              <Plus className="w-6 h-6 mb-1" />
+              <span className="text-xs">添加封面</span>
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+};
+
+interface DetailImagesSectionProps {
+  detailImages: string[];
+  canUpload: boolean;
+  onUpload: (file: File) => void;
+  onRemove: (url: string) => void;
+  onMoveUp: (index: number) => void;
+  onMoveDown: (index: number) => void;
+}
+
+/**
+ * 详情图管理(0-N 张,任意数量)
+ * - 详情页下拉懒加载展示
+ */
+const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
+  detailImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown,
+}) => {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('图片大小不能超过 10MB');
+      return;
+    }
+    onUpload(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-ocean-deep flex items-center gap-2">
+          <ImageIcon className="w-4 h-4" /> 详情图
+          <span className="text-xs text-gray-400 font-normal">
+            ({detailImages.length} 张,详情页下拉时懒加载展示)
+          </span>
+        </h3>
+        {canUpload && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="w-3 h-3 mr-1" /> 上传详情图
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFile}
+              className="hidden"
+            />
+          </>
+        )}
+      </div>
+
+      {detailImages.length === 0 ? (
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center bg-gray-50">
+          <ImageIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+          <p className="text-sm text-gray-500 mb-2">
+            暂无详情图(可选,详情页下拉时会按需加载展示)
+          </p>
+          {!canUpload && (
+            <p className="text-xs text-gray-400">
+              请先创建并保存产品基本信息,再回来上传详情图
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+          {detailImages.map((url, idx) => (
+            <div
+              key={url}
+              className="relative group rounded-lg overflow-hidden border-2 border-transparent hover:border-ocean-blue transition-colors aspect-square bg-gray-100"
+            >
+              <ProductImage
+                src={url}
+                alt={`详情图 ${idx + 1}`}
+                aspectRatio="1/1"
+                className="w-full h-full"
+              />
+              <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/60 text-white text-[10px] rounded">
+                {idx + 1}
+              </div>
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                {idx > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onMoveUp(idx)}
+                    className="p-1.5 bg-white rounded-full text-gray-700 hover:bg-ocean-blue hover:text-white"
+                    title="上移"
+                  >
+                    <ChevronUp className="w-3 h-3" />
+                  </button>
+                )}
+                {idx < detailImages.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onMoveDown(idx)}
+                    className="p-1.5 bg-white rounded-full text-gray-700 hover:bg-ocean-blue hover:text-white"
+                    title="下移"
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(url)}
+                  className="p-1.5 bg-white rounded-full text-red-500 hover:bg-red-500 hover:text-white"
+                  title="删除"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-ocean-blue hover:bg-ocean-blue/5 transition-colors flex flex-col items-center justify-center text-gray-400 hover:text-ocean-blue"
+          >
+            <Plus className="w-6 h-6 mb-1" />
+            <span className="text-xs">添加详情</span>
+          </button>
+        </div>
+      )}
+    </section>
   );
 };
 

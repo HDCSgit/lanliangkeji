@@ -174,6 +174,10 @@ module.exports = {
           "90%": { opacity: "0.8" },
           "100%": { transform: "translateY(-100vh) scale(1)", opacity: "0" },
         },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -189,6 +193,7 @@ module.exports = {
         "scale-in": "scale-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "rotate-slow": "rotate-slow 20s linear infinite",
         "bubble-rise": "bubble-rise 8s ease-in-out infinite",
+        "shimmer": "shimmer 1.5s linear infinite",
       },
       transitionTimingFunction: {
         "custom-expo": "cubic-bezier(0.16, 1, 0.3, 1)",
