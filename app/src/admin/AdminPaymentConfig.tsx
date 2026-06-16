@@ -8,10 +8,10 @@ import { UserStore } from '@/data/userStore';
 
 interface BankTransferInfo {
   enabled: boolean;
-  frontend_enabled: boolean;
-  account_name: string;
-  bank_name: string;
-  account_number: string;
+  frontendEnabled: boolean;
+  accountName: string;
+  bankName: string;
+  accountNumber: string;
 }
 
 interface AlipayInfo {
@@ -74,11 +74,13 @@ const AdminPaymentConfig: React.FC = () => {
     setSaving(true);
     setError('');
     try {
+      // 注意:axios 请求拦截器会把 payload snake→camel 转成 request body
+      // 所以这里直接传 camelCase 即可,后端会收到 snake 字段名
       await apiPut('/admin/payment-gateway/bank-transfer', {
-        enabled: bankForm.frontend_enabled,
-        account_name: bankForm.account_name,
-        bank_name: bankForm.bank_name,
-        account_number: bankForm.account_number,
+        enabled: bankForm.frontendEnabled,
+        accountName: bankForm.accountName,
+        bankName: bankForm.bankName,
+        accountNumber: bankForm.accountNumber,
       });
       setSaveMessage('对公转账已保存');
       await loadConfig();
@@ -336,9 +338,9 @@ const AdminPaymentConfig: React.FC = () => {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={bankForm.frontend_enabled}
+                  checked={bankForm.frontendEnabled}
                   disabled={!bankForm.enabled || saving}
-                  onChange={(e) => setBankForm({ ...bankForm, frontend_enabled: e.target.checked })}
+                  onChange={(e) => setBankForm({ ...bankForm, frontendEnabled: e.target.checked })}
                   className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
                 />
                 <span className="text-sm">前端展示</span>
@@ -355,7 +357,7 @@ const AdminPaymentConfig: React.FC = () => {
             </div>
           )}
 
-          {bankForm.frontend_enabled && bankForm.enabled && (
+          {bankForm.frontendEnabled && bankForm.enabled && (
             <>
               <div className="p-4 bg-orange-50 rounded-xl">
                 <div className="flex items-center gap-2 text-orange-700 mb-2">
@@ -372,8 +374,8 @@ const AdminPaymentConfig: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">开户名</label>
                   <input
                     type="text"
-                    value={bankForm.account_name}
-                    onChange={(e) => setBankForm({ ...bankForm, account_name: e.target.value })}
+                    value={bankForm.accountName}
+                    onChange={(e) => setBankForm({ ...bankForm, accountName: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:border-ocean-blue focus:outline-none"
                     placeholder="请输入开户名"
                   />
@@ -382,8 +384,8 @@ const AdminPaymentConfig: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">开户行</label>
                   <input
                     type="text"
-                    value={bankForm.bank_name}
-                    onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })}
+                    value={bankForm.bankName}
+                    onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:border-ocean-blue focus:outline-none"
                     placeholder="请输入开户行"
                   />
@@ -392,8 +394,8 @@ const AdminPaymentConfig: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">银行账号</label>
                   <input
                     type="text"
-                    value={bankForm.account_number}
-                    onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })}
+                    value={bankForm.accountNumber}
+                    onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:border-ocean-blue focus:outline-none font-mono"
                     placeholder="请输入银行账号"
                   />
@@ -419,7 +421,7 @@ const AdminPaymentConfig: React.FC = () => {
             </>
           )}
 
-          {(!bankForm.enabled || !bankForm.frontend_enabled) && (
+          {(!bankForm.enabled || !bankForm.frontendEnabled) && (
             <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">
               <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p>{!bankForm.enabled ? '对公转账已禁用' : '对公转账前端展示已关闭'}</p>

@@ -762,8 +762,9 @@ def toggle_alipay_frontend(
 ):
     """后台:切换支付宝前端展示开关(仅前端展示,不影响 .env 真值)"""
     cfg = db.query(PaymentGatewayConfig).first()
-    alipay_cfg = (cfg.alipay if cfg and cfg.alipay else {}) or {}
-    alipay_cfg["frontend_enabled"] = body.frontend_enabled
+    # 关键:用 spread 创建新 dict,SQLAlchemy JSON 列才能识别变更
+    base_alipay = (cfg.alipay if cfg and cfg.alipay else {}) or {}
+    alipay_cfg = {**base_alipay, "frontend_enabled": body.frontend_enabled}
     if not cfg:
         cfg = PaymentGatewayConfig(
             wechat_pay={"enabled": False, "frontend_enabled": True, "mch_id": "", "app_id": "", "api_key": "", "notify_url": ""},
@@ -787,8 +788,9 @@ def toggle_wechat_frontend(
 ):
     """后台:切换微信支付前端展示开关(仅前端展示,不影响 .env 真值)"""
     cfg = db.query(PaymentGatewayConfig).first()
-    wechat_cfg = (cfg.wechat_pay if cfg and cfg.wechat_pay else {}) or {}
-    wechat_cfg["frontend_enabled"] = body.frontend_enabled
+    # 关键:用 spread 创建新 dict,SQLAlchemy JSON 列才能识别变更
+    base_wechat = (cfg.wechat_pay if cfg and cfg.wechat_pay else {}) or {}
+    wechat_cfg = {**base_wechat, "frontend_enabled": body.frontend_enabled}
     if not cfg:
         cfg = PaymentGatewayConfig(
             wechat_pay=wechat_cfg,

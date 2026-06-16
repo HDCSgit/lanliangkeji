@@ -90,13 +90,26 @@ def create_payment(
             pay_url = f"/api/v1/payments/{payment_no}/status"
             qr_code = _make_qr_url(f"alipay:{payment_no}")
     elif payload.method == PaymentMethod.BANK_TRANSFER:
-        account = db.query(ReceivableAccount).first()
-        if account:
+        # 优先用 PaymentGatewayConfig.bank_transfer(后管新配置),fallback 到 ReceivableAccount 旧表
+        cfg = db.query(PaymentGatewayConfig).first()
+        if cfg and cfg.bank_transfer and (
+            cfg.bank_transfer.get("account_name")
+            or cfg.bank_transfer.get("bank_name")
+            or cfg.bank_transfer.get("account_number")
+        ):
             receivable_account = {
-                "account_name": account.account_name,
-                "bank_name": account.bank_name,
-                "account_number": account.account_number,
+                "account_name": cfg.bank_transfer.get("account_name", ""),
+                "bank_name": cfg.bank_transfer.get("bank_name", ""),
+                "account_number": cfg.bank_transfer.get("account_number", ""),
             }
+        else:
+            account = db.query(ReceivableAccount).first()
+            if account:
+                receivable_account = {
+                    "account_name": account.account_name,
+                    "bank_name": account.bank_name,
+                    "account_number": account.account_number,
+                }
 
     payment = PaymentOrder(
         order_id=order.id,
@@ -427,6 +440,21 @@ def get_payment_methods(db: Session = Depends(get_db)):
 
 @router.get("/receivable-account", response_model=ApiResponse)
 def get_receivable_account(db: Session = Depends(get_db)):
+    """获取收款账户(优先读 PaymentGatewayConfig.bank_transfer 后管配置,fallback 到 ReceivableAccount 表)"""
+    # 优先读后管新配置
+    cfg = db.query(PaymentGatewayConfig).first()
+    if cfg and cfg.bank_transfer:
+        bank = cfg.bank_transfer
+        if bank.get("account_name") or bank.get("bank_name") or bank.get("account_number"):
+            return ApiResponse(success=True, data={
+                "id": cfg.id,
+                "account_name": bank.get("account_name", ""),
+                "bank_name": bank.get("bank_name", ""),
+                "account_number": bank.get("account_number", ""),
+                "updated_at": cfg.updated_at,
+            })
+
+    # fallback 到旧表
     account = db.query(ReceivableAccount).first()
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="收款账户未配置")
