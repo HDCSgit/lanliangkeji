@@ -474,14 +474,14 @@ const AdminProducts: React.FC = () => {
 
       {/* Edit/Create Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0 flex flex-col">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
             <DialogTitle>
               {editingProduct ? '编辑产品' : '添加产品'}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 mt-4">
+          <div className="space-y-6 px-6 py-4 overflow-y-auto flex-1">
             {/* ===== 区块 1: 基本信息 ===== */}
             <section>
               <h3 className="text-sm font-bold text-ocean-deep mb-3 flex items-center gap-2">
@@ -563,39 +563,48 @@ const AdminProducts: React.FC = () => {
                 </div>
               ) : (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      {/* 显式列宽,避免"规格名称"被挤到竖排 */}
+                      <col className="w-[34%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[8%]" />
+                    </colgroup>
                     <thead className="bg-gray-50 text-gray-600">
                       <tr>
-                        <th className="px-3 py-2 text-left font-medium">规格名称 *</th>
-                        <th className="px-3 py-2 text-left font-medium">单位</th>
-                        <th className="px-3 py-2 text-left font-medium">单价 (¥) *</th>
-                        <th className="px-3 py-2 text-left font-medium">库存 *</th>
-                        <th className="px-3 py-2 text-left font-medium">起订量</th>
-                        <th className="px-3 py-2 text-center font-medium w-16">操作</th>
+                        <th className="px-2 py-2 text-left font-medium">规格名称 *</th>
+                        <th className="px-2 py-2 text-left font-medium">单位</th>
+                        <th className="px-2 py-2 text-left font-medium">单价 (¥) *</th>
+                        <th className="px-2 py-2 text-left font-medium">库存 *</th>
+                        <th className="px-2 py-2 text-left font-medium">起订量</th>
+                        <th className="px-1 py-2 text-center font-medium">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {specs.map((spec, index) => (
                         <tr key={spec.id || index} className="hover:bg-gray-50">
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5">
                             <input
                               type="text"
                               value={spec.name ?? ''}
                               onChange={(e) => updateSpec(index, { name: e.target.value } as any)}
                               placeholder="例如:500g装"
-                              className="w-full px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                              className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5">
                             <input
                               type="text"
                               value={spec.unit ?? ''}
                               onChange={(e) => updateSpec(index, { unit: e.target.value } as any)}
-                              placeholder="件/盒/kg"
-                              className="w-20 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                              placeholder="件"
+                              className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5">
                             <input
                               type="text"
                               inputMode="decimal"
@@ -607,10 +616,10 @@ const AdminProducts: React.FC = () => {
                                 }
                               }}
                               placeholder="0.00"
-                              className="w-24 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                              className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5">
                             <input
                               type="text"
                               inputMode="numeric"
@@ -622,10 +631,10 @@ const AdminProducts: React.FC = () => {
                                 }
                               }}
                               placeholder="0"
-                              className="w-20 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                              className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5">
                             <input
                               type="text"
                               inputMode="numeric"
@@ -637,14 +646,14 @@ const AdminProducts: React.FC = () => {
                                 }
                               }}
                               placeholder="1"
-                              className="w-16 px-2 py-1 border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                              className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
                             />
                           </td>
-                          <td className="px-3 py-1.5 text-center">
+                          <td className="px-1 py-1.5 text-center">
                             <button
                               type="button"
                               onClick={() => removeSpec(index)}
-                              className="text-gray-400 hover:text-red-500"
+                              className="text-gray-400 hover:text-red-500 inline-flex items-center justify-center w-7 h-7"
                               title="删除"
                             >
                               <X className="w-4 h-4" />
@@ -737,7 +746,7 @@ const AdminProducts: React.FC = () => {
             </section>
           </div>
 
-          <DialogFooter className="mt-6">
+          <DialogFooter className="px-6 py-3 border-t shrink-0 bg-gray-50">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={saving}>
               取消
             </Button>
@@ -877,17 +886,24 @@ const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
       </div>
 
       {coverImages.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center bg-gray-50">
-          <ImageIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-          <p className="text-sm text-gray-500 mb-2">
-            至少上传 1 张封面图(建议 800×800 以上)
+        <button
+          type="button"
+          disabled={!canUpload}
+          onClick={() => canUpload && fileRef.current?.click()}
+          className={`w-full border-2 border-dashed rounded-lg p-6 text-center bg-gray-50 transition-colors ${
+            canUpload
+              ? 'border-gray-300 hover:border-ocean-blue hover:bg-ocean-blue/5 cursor-pointer'
+              : 'border-gray-200 cursor-not-allowed opacity-70'
+          }`}
+        >
+          <Upload className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+          <p className="text-sm text-gray-700 mb-1 font-medium">
+            {canUpload ? '点击上传封面图' : '请先保存产品基本信息'}
           </p>
-          {!canUpload && (
-            <p className="text-xs text-gray-400">
-              请先创建并保存产品基本信息,再回来上传封面图
-            </p>
-          )}
-        </div>
+          <p className="text-xs text-gray-400">
+            支持 JPG/PNG/WebP,建议 800×800 以上,最多 5 张
+          </p>
+        </button>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {coverImages.map((url, idx) => (
@@ -1022,17 +1038,24 @@ const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
       </div>
 
       {detailImages.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center bg-gray-50">
-          <ImageIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-          <p className="text-sm text-gray-500 mb-2">
-            暂无详情图(可选,详情页下拉时会按需加载展示)
+        <button
+          type="button"
+          disabled={!canUpload}
+          onClick={() => canUpload && fileRef.current?.click()}
+          className={`w-full border-2 border-dashed rounded-lg p-6 text-center bg-gray-50 transition-colors ${
+            canUpload
+              ? 'border-gray-300 hover:border-ocean-blue hover:bg-ocean-blue/5 cursor-pointer'
+              : 'border-gray-200 cursor-not-allowed opacity-70'
+          }`}
+        >
+          <Upload className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+          <p className="text-sm text-gray-700 mb-1 font-medium">
+            {canUpload ? '点击上传详情图' : '请先保存产品基本信息'}
           </p>
-          {!canUpload && (
-            <p className="text-xs text-gray-400">
-              请先创建并保存产品基本信息,再回来上传详情图
-            </p>
-          )}
-        </div>
+          <p className="text-xs text-gray-400">
+            可上传 0~N 张,详情页下拉时会按需懒加载展示
+          </p>
+        </button>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
           {detailImages.map((url, idx) => (
