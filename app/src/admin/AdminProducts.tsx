@@ -31,6 +31,15 @@ const AdminProducts: React.FC = () => {
   // 当前对话框里的是不是"新建草稿"(用于取消时删除)
   const [isDraft, setIsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 上传进度(记录上传中 / 上传失败的图片)
+  // key: 'cover' | 'detail', value: { loadingCount, errors: [{index, message}] }
+  const [uploadStatus, setUploadStatus] = useState<{
+    cover: { loading: boolean; error: string | null };
+    detail: { loading: boolean; error: string | null };
+  }>({
+    cover: { loading: false, error: null },
+    detail: { loading: false, error: null },
+  });
 
   // 基础字段
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -96,6 +105,10 @@ const AdminProducts: React.FC = () => {
     setSpecs([]);
     setFeatures([]);
     setFeatureInput('');
+    setUploadStatus({
+      cover: { loading: false, error: null },
+      detail: { loading: false, error: null },
+    });
   };
 
   const openEditDialog = (product: Product) => {
@@ -236,6 +249,7 @@ const AdminProducts: React.FC = () => {
   // 永远走 editingProduct.id(openCreateDialog 已经创建了草稿,所以一定有 id)
   const handleCoverUpload = async (file: File) => {
     if (!editingProduct) return;
+    setUploadStatus((s) => ({ ...s, cover: { loading: true, error: null } }));
     try {
       const position = (formData.coverImages?.length ?? 0);
       const r = await DataStore.uploadProductImage(editingProduct.id, file, 'cover', position);
@@ -245,30 +259,44 @@ const AdminProducts: React.FC = () => {
         image: r.coverImages[0] || prev.image,
         enableCarousel: (prev.enableCarousel ?? false) && r.coverImages.length >= 2 ? prev.enableCarousel : (r.coverImages.length >= 2 ? prev.enableCarousel : false),
       }));
+      setUploadStatus((s) => ({ ...s, cover: { loading: false, error: null } }));
       await loadProducts();
     } catch (e: any) {
       const status = e?.response?.status ?? e?.status;
+      let msg: string;
       if (status === 401 || status === 403) {
-        alert('上传失败:当前账号没有上传图片的权限。');
+        msg = '无上传权限(需要系统管理员)';
       } else {
-        alert('封面图上传失败: ' + (e?.message || e));
+        msg = e?.message || '上传失败';
       }
+      setUploadStatus((s) => ({ ...s, cover: { loading: false, error: msg } }));
+      // 5 秒后自动清除错误提示
+      setTimeout(() => {
+        setUploadStatus((s) => (s.cover.error === msg ? { ...s, cover: { ...s.cover, error: null } } : s));
+      }, 5000);
     }
   };
 
   const handleDetailUpload = async (file: File) => {
     if (!editingProduct) return;
+    setUploadStatus((s) => ({ ...s, detail: { loading: true, error: null } }));
     try {
       const r = await DataStore.uploadProductImage(editingProduct.id, file, 'detail');
       setFormData((prev) => ({ ...prev, detailImages: r.detailImages }));
+      setUploadStatus((s) => ({ ...s, detail: { loading: false, error: null } }));
       await loadProducts();
     } catch (e: any) {
       const status = e?.response?.status ?? e?.status;
+      let msg: string;
       if (status === 401 || status === 403) {
-        alert('上传失败:当前账号没有上传图片的权限。');
+        msg = '无上传权限(需要系统管理员)';
       } else {
-        alert('详情图上传失败: ' + (e?.message || e));
+        msg = e?.message || '上传失败';
       }
+      setUploadStatus((s) => ({ ...s, detail: { loading: false, error: msg } }));
+      setTimeout(() => {
+        setUploadStatus((s) => (s.detail.error === msg ? { ...s, detail: { ...s.detail, error: null } } : s));
+      }, 5000);
     }
   };
 
@@ -622,6 +650,8 @@ const AdminProducts: React.FC = () => {
               coverImages={formData.coverImages || []}
               canUpload={true}
               isCreating={!editingProduct}
+              isUploading={uploadStatus.cover.loading}
+              uploadError={uploadStatus.cover.error}
               onUpload={handleCoverUpload}
               onRemove={handleRemoveCoverServer}
               onMoveUp={(idx) => moveCover(idx, -1)}
@@ -633,6 +663,8 @@ const AdminProducts: React.FC = () => {
               detailImages={formData.detailImages || []}
               canUpload={true}
               isCreating={!editingProduct}
+              isUploading={uploadStatus.detail.loading}
+              uploadError={uploadStatus.detail.error}
               onUpload={handleDetailUpload}
               onRemove={handleRemoveDetailServer}
               onMoveUp={(idx) => moveDetail(idx, -1)}
@@ -921,7 +953,9 @@ interface CoverImagesSectionProps {
   onRemove: (url: string) => void;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
-  isCreating: boolean;  // 是否新建模式(用于提示文案)
+  isCreating: boolean;
+  isUploading?: boolean;
+  uploadError?: string | null;
 }
 
 /**
@@ -932,6 +966,7 @@ interface CoverImagesSectionProps {
  */
 const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
   coverImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown, isCreating,
+  isUploading, uploadError,
 }) => {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -980,10 +1015,18 @@ const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
         )}
       </div>
 
+      {/* 错误提示(行业做法:错误显示在上传区附近,不弹 alert 打断用户) */}
+      {uploadError && (
+        <div className="mb-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+          <X className="w-4 h-4 shrink-0" />
+          <span>上传失败:{uploadError}</span>
+        </div>
+      )}
+
       {coverImages.length === 0 ? (
         <button
           type="button"
-          disabled={!canUpload}
+          disabled={!canUpload || isUploading}
           onClick={() => canUpload && fileRef.current?.click()}
           className={`w-full border-2 border-dashed rounded-lg p-6 text-center bg-gray-50 transition-colors ${
             canUpload
@@ -1000,6 +1043,14 @@ const CoverImagesSection: React.FC<CoverImagesSectionProps> = ({
         </button>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {/* 上传中的占位(行业做法:上传时立即占位,避免用户重复点) */}
+          {isUploading && (
+            <div className="relative aspect-square rounded-lg border-2 border-ocean-blue/30 bg-ocean-blue/5 flex flex-col items-center justify-center text-ocean-blue">
+              {/* 旋转 spinner */}
+              <div className="w-8 h-8 border-2 border-ocean-blue/30 border-t-ocean-blue rounded-full animate-spin mb-2" />
+              <span className="text-xs">上传中…</span>
+            </div>
+          )}
           {coverImages.map((url, idx) => (
             <div
               key={url}
@@ -1076,6 +1127,8 @@ interface DetailImagesSectionProps {
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
   isCreating: boolean;
+  isUploading?: boolean;
+  uploadError?: string | null;
 }
 
 /**
@@ -1084,6 +1137,7 @@ interface DetailImagesSectionProps {
  */
 const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
   detailImages, canUpload, onUpload, onRemove, onMoveUp, onMoveDown, isCreating,
+  isUploading, uploadError,
 }) => {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -1132,10 +1186,18 @@ const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
         )}
       </div>
 
+      {/* 错误提示 */}
+      {uploadError && (
+        <div className="mb-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+          <X className="w-4 h-4 shrink-0" />
+          <span>上传失败:{uploadError}</span>
+        </div>
+      )}
+
       {detailImages.length === 0 ? (
         <button
           type="button"
-          disabled={!canUpload}
+          disabled={!canUpload || isUploading}
           onClick={() => canUpload && fileRef.current?.click()}
           className={`w-full border-2 border-dashed rounded-lg p-6 text-center bg-gray-50 transition-colors ${
             canUpload
@@ -1152,6 +1214,12 @@ const DetailImagesSection: React.FC<DetailImagesSectionProps> = ({
         </button>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+          {isUploading && (
+            <div className="relative aspect-square rounded-lg border-2 border-ocean-blue/30 bg-ocean-blue/5 flex flex-col items-center justify-center text-ocean-blue">
+              <div className="w-8 h-8 border-2 border-ocean-blue/30 border-t-ocean-blue rounded-full animate-spin mb-2" />
+              <span className="text-xs">上传中…</span>
+            </div>
+          )}
           {detailImages.map((url, idx) => (
             <div
               key={url}
