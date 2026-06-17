@@ -39,6 +39,15 @@ if [ -f "$INDEX_HTML" ]; then
     log 'index.html: 注入 no-cache meta 标签'
 fi
 
+log '=== sync nginx vhost conf ==='
+# 把项目里的 nginx conf 同步到 vhost 目录(让 deploy.sh 是单一真理源)
+# 注意: deploy.sh 自己 reload nginx(下面),所以这个 cp 之后必须 reload 才生效
+VHOST_DIR="/www/server/panel/vhost/nginx"
+if [ -f "$APP_DIR/nginx-lanliangkeji.conf" ] && [ -d "$VHOST_DIR" ]; then
+    cp -f "$APP_DIR/nginx-lanliangkeji.conf" "$VHOST_DIR/www.lanliangkeji.cn.conf"
+    log 'nginx vhost conf synced'
+fi
+
 log '=== reload nginx ==='
 nginx -t 2>&1 | tee -a "$LOG"
 /usr/local/bin/lanliang-nginx-reload.sh
