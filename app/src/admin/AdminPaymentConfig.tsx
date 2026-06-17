@@ -127,6 +127,32 @@ const AdminPaymentConfig: React.FC = () => {
     }
   };
 
+  // 切换对公转账前端展示开关(即时生效,无需点保存)
+  // 注意:对公转账的"前端展示"对应 DB 字段是 enabled(不是 frontend_enabled),
+  //      但后管 GET 时把它映射成 frontend_enabled 返回(语义和微信/支付宝对齐)。
+  const handleToggleBankFrontend = async (next: boolean) => {
+    if (!bankForm) return;
+    setSaving(true);
+    setError('');
+    try {
+      // 用 PUT bank-transfer 接口,把 enabled 字段改成 next
+      // 注:不要传 accountName/bankName/accountNumber,否则会清空它们
+      await apiPut('/admin/payment-gateway/bank-transfer', {
+        enabled: next,
+        accountName: bankForm.accountName,
+        bankName: bankForm.bankName,
+        accountNumber: bankForm.accountNumber,
+      });
+      await loadConfig();
+      setSaveMessage(next ? '对公转账前端展示已启用' : '对公转账前端展示已隐藏');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (e: any) {
+      setError(e?.message || '切换失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const tabs = [
     { id: 'wechat' as const, name: '微信支付', icon: Smartphone },
     { id: 'alipay' as const, name: '支付宝', icon: CreditCard },
@@ -342,7 +368,7 @@ const AdminPaymentConfig: React.FC = () => {
                   type="checkbox"
                   checked={bankForm.frontendEnabled}
                   disabled={!bankForm.enabled || saving}
-                  onChange={(e) => setBankForm({ ...bankForm, frontendEnabled: e.target.checked })}
+                  onChange={(e) => handleToggleBankFrontend(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
                 />
                 <span className="text-sm">前端展示</span>
