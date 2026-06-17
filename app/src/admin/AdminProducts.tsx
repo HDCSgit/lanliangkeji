@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Plus, Edit2, Trash2, Eye, EyeOff, Search,
   ImageIcon, X, Package, Upload, GripVertical, ChevronUp, ChevronDown
@@ -51,6 +52,11 @@ const AdminProducts: React.FC = () => {
     coverImages: [],
     detailImages: [],
     enableCarousel: false,
+    // 运费规则(默认包邮)
+    shippingEnabled: false,
+    shippingInitialFee: 0,
+    shippingPerUnitCount: 1,
+    shippingPerUnitFee: 0,
   });
 
   // 规格
@@ -123,6 +129,10 @@ const AdminProducts: React.FC = () => {
       coverImages: product.coverImages || (product.image ? [product.image] : []),
       detailImages: product.detailImages || [],
       enableCarousel: !!product.enableCarousel,
+      shippingEnabled: !!product.shippingEnabled,
+      shippingInitialFee: product.shippingInitialFee ?? 0,
+      shippingPerUnitCount: product.shippingPerUnitCount ?? 1,
+      shippingPerUnitFee: product.shippingPerUnitFee ?? 0,
     });
     setSpecs(product.specs || []);
     setFeatures(product.features || []);
@@ -146,6 +156,11 @@ const AdminProducts: React.FC = () => {
         features: [],
         is_active: false,  // 草稿默认不上架
         order: 0,
+        // 运费规则(默认包邮)
+        shipping_enabled: false,
+        shipping_initial_fee: 0,
+        shipping_per_unit_count: 1,
+        shipping_per_unit_fee: 0,
         specs: [],
       } as any);
       // 拿到的 draft 就是新建草稿,当作 editingProduct
@@ -159,6 +174,10 @@ const AdminProducts: React.FC = () => {
         coverImages: [],
         detailImages: [],
         enableCarousel: false,
+        shippingEnabled: false,
+        shippingInitialFee: 0,
+        shippingPerUnitCount: 1,
+        shippingPerUnitFee: 0,
       });
       setSpecs([]);
       setFeatures([]);
@@ -351,6 +370,14 @@ const AdminProducts: React.FC = () => {
 
   // ---- 保存 ----
   const handleSave = async () => {
+    // 关键:单价格式 input 是 uncontrolled + onBlur 写回 state,
+    // 用户在 input 里改了值但没失焦就点保存时,onBlur 还没触发,
+    // 必须在保存前主动 blur + flushSync,让 React 把最新值同步到 formData/specs
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    flushSync(() => {});
+
     // 权限校验:产品创建/更新需要 sysadmin
     if (!userStore.isSysAdmin()) {
       alert('保存失败:当前账号没有创建/编辑产品的权限(需要系统管理员)。请用 admin 账号登录后再试。');
@@ -400,6 +427,11 @@ const AdminProducts: React.FC = () => {
         features,
         is_active: formData.isActive ?? true,
         order: formData.order ?? products.length + 1,
+        // 运费规则
+        shipping_enabled: !!formData.shippingEnabled,
+        shipping_initial_fee: formData.shippingInitialFee ?? 0,
+        shipping_per_unit_count: formData.shippingPerUnitCount ?? 1,
+        shipping_per_unit_fee: formData.shippingPerUnitFee ?? 0,
         specs: specs.map((s) => ({
           name: s.name ?? '',
           unit: s.unit || '件',
@@ -731,14 +763,19 @@ const AdminProducts: React.FC = () => {
                             />
                           </td>
                           <td className="px-2 py-1.5">
+                            {/* 改用 uncontrolled + onBlur:受控 + number state 会让 "5." 这种中间态
+                                在 React 重 render 时被 String(5) 强制覆盖,小数点消失 */}
                             <input
+                              key={`price-${spec.id || index}`}
                               type="text"
                               inputMode="decimal"
-                              value={spec.price === null || spec.price === undefined ? '' : String(spec.price)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '' || /^\d*\.?\d*$/.test(v)) {
-                                  updateSpec(index, { price: v === '' ? null : (parseFloat(v) as any) } as any);
+                              defaultValue={spec.price === null || spec.price === undefined ? '' : String(spec.price)}
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                const cleaned = raw.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                                if (cleaned === '' || /^\d*\.?\d*$/.test(cleaned)) {
+                                  const num = cleaned === '' ? null : parseFloat(cleaned);
+                                  updateSpec(index, { price: num as any } as any);
                                 }
                               }}
                               placeholder="0.00"
@@ -747,14 +784,15 @@ const AdminProducts: React.FC = () => {
                           </td>
                           <td className="px-2 py-1.5">
                             <input
+                              key={`stock-${spec.id || index}`}
                               type="text"
                               inputMode="numeric"
-                              value={spec.stock === null || spec.stock === undefined ? '' : String(spec.stock)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '' || /^\d*$/.test(v)) {
-                                  updateSpec(index, { stock: v === '' ? null : (parseInt(v, 10) as any) } as any);
-                                }
+                              defaultValue={spec.stock === null || spec.stock === undefined ? '' : String(spec.stock)}
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                const cleaned = raw.replace(/\D/g, '');
+                                const num = cleaned === '' ? null : parseInt(cleaned, 10);
+                                updateSpec(index, { stock: num as any } as any);
                               }}
                               placeholder="0"
                               className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
@@ -762,14 +800,15 @@ const AdminProducts: React.FC = () => {
                           </td>
                           <td className="px-2 py-1.5">
                             <input
+                              key={`minOrder-${spec.id || index}`}
                               type="text"
                               inputMode="numeric"
-                              value={spec.minOrder === null || spec.minOrder === undefined ? '' : String(spec.minOrder)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '' || /^\d*$/.test(v)) {
-                                  updateSpec(index, { minOrder: v === '' ? null : (parseInt(v, 10) as any) } as any);
-                                }
+                              defaultValue={spec.minOrder === null || spec.minOrder === undefined ? '' : String(spec.minOrder)}
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                const cleaned = raw.replace(/\D/g, '');
+                                const num = cleaned === '' ? null : parseInt(cleaned, 10);
+                                updateSpec(index, { minOrder: num as any } as any);
                               }}
                               placeholder="1"
                               className="w-full min-w-0 px-2 py-1 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
@@ -831,6 +870,95 @@ const AdminProducts: React.FC = () => {
                       </button>
                     </span>
                   ))}
+                </div>
+              )}
+            </section>
+
+            {/* ===== 区块 5.5: 运费规则 ===== */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">收取运费</p>
+                  <p className="text-xs text-gray-500">
+                    {formData.shippingEnabled
+                      ? '已开启 — 用户下单时会按规则加运费'
+                      : '未开启 — 该商品包邮'}
+                  </p>
+                </div>
+                <ToggleRow
+                  checked={!!formData.shippingEnabled}
+                  onChange={(v) => setFormData({ ...formData, shippingEnabled: v })}
+                  onLabel="已开启"
+                  offLabel="包邮"
+                />
+              </div>
+
+              {formData.shippingEnabled && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 py-3 bg-orange-50 rounded-lg">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      初始运费 (¥)
+                    </label>
+                    <input
+                      key={`shipping-initial-fee-${formData.shippingInitialFee ?? ''}`}
+                      type="text"
+                      inputMode="decimal"
+                      defaultValue={formData.shippingInitialFee === undefined || formData.shippingInitialFee === null ? '' : String(formData.shippingInitialFee)}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const cleaned = raw.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                        const num = cleaned === '' ? 0 : parseFloat(cleaned);
+                        if (!isNaN(num)) setFormData({ ...formData, shippingInitialFee: num });
+                      }}
+                      placeholder="0"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">第一件收的运费</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      每多少件加一次 (件)
+                    </label>
+                    <input
+                      key={`shipping-per-unit-count-${formData.shippingPerUnitCount ?? ''}`}
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formData.shippingPerUnitCount === undefined || formData.shippingPerUnitCount === null ? '' : String(formData.shippingPerUnitCount)}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const cleaned = raw.replace(/\D/g, '');
+                        const num = cleaned === '' ? 1 : parseInt(cleaned, 10);
+                        if (!isNaN(num) && num >= 1) setFormData({ ...formData, shippingPerUnitCount: num });
+                      }}
+                      placeholder="1"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">如每 5 件加一次</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      每单位加多少运费 (¥)
+                    </label>
+                    <input
+                      key={`shipping-per-unit-fee-${formData.shippingPerUnitFee ?? ''}`}
+                      type="text"
+                      inputMode="decimal"
+                      defaultValue={formData.shippingPerUnitFee === undefined || formData.shippingPerUnitFee === null ? '' : String(formData.shippingPerUnitFee)}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const cleaned = raw.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                        const num = cleaned === '' ? 0 : parseFloat(cleaned);
+                        if (!isNaN(num)) setFormData({ ...formData, shippingPerUnitFee: num });
+                      }}
+                      placeholder="0"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded focus:border-ocean-blue focus:outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">如每多 5 件加 ¥10</p>
+                  </div>
+                  <div className="md:col-span-3 text-xs text-orange-700 bg-white px-3 py-2 rounded">
+                    <strong>示例：</strong>买 1 件运费 = {formData.shippingInitialFee ?? 0} 元；
+                    买 6 件 = {formData.shippingInitialFee ?? 0} + ceil((6-1)/{formData.shippingPerUnitCount ?? 1}) × {formData.shippingPerUnitFee ?? 0} 元
+                  </div>
                 </div>
               )}
             </section>
