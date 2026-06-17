@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Search, Grid3X3, List, Eye, ChevronRight, Package } from 'lucide-react';
+import { Search, Grid3X3, List, ChevronRight, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DataStore } from '@/data/store';
 import type { Product } from '@/types';
