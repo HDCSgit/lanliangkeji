@@ -16,6 +16,8 @@ server/.ruff_cache/
 server/*.db
 server/*.sqlite
 server/*.sqlite3
+# 根目录的 dev db(本地开发库,不要污染其他协作者)
+lanliang_dev.db
 
 # 临时上传 / 日志
 server/uploads/
