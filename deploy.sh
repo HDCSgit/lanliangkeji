@@ -27,18 +27,18 @@ systemctl is-active lanliang-backend | tee -a "$LOG"
 
 log '=== frontend deps ==='
 cd "$FRONT_DIR"
-# 只装新加的依赖(production only,跳过 devDependencies)
-# 加 --no-audit --no-fund 减少噪声;用 ci 而不是 install 保持 lock 一致
+# 装完整依赖(devDependencies 包含 typescript,vite,各种类型,build 脚本要)
+# 加 --no-audit --no-fund 减少噪声;用 ci 保持 lock 一致
 if [ -f package-lock.json ]; then
-    npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -5 | tee -a "$LOG"
+    npm ci --no-audit --no-fund 2>&1 | tail -8 | tee -a "$LOG"
 else
-    npm install --omit=dev --no-audit --no-fund 2>&1 | tail -5 | tee -a "$LOG"
+    npm install --no-audit --no-fund 2>&1 | tail -8 | tee -a "$LOG"
 fi
 
 log '=== frontend build ==='
 chattr -i -R dist/ 2>/dev/null || true
 rm -rf dist
-npm run build 2>&1 | tail -8 | tee -a "$LOG"
+npm run build 2>&1 | tee -a "$LOG"
 
 # index.html 不缓存(否则手机端会一直用旧 JS,新代码不生效)
 # assets/* 走 30 天长期 cache(Vite 自带 hash 文件名,改名即失效,安全)
