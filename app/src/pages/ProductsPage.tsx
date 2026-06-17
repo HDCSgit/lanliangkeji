@@ -213,13 +213,21 @@ const ProductsPage: React.FC = () => {
                     sizeHint="thumb"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-ocean-deep/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  {/* 
+                    查看详情 按钮:
+                    - 桌面端:hover 才显示(避免抢图)
+                    - 移动端:无 hover,默认显示(opacity-100)+ 触摸时缩小反馈
+                    关键 bug 修复:之前 opacity-0 group-hover:opacity-100 在手机/微信 WebView 
+                    没有 hover,所以按钮永远不可见,用户以为整张图不是按钮
+                  */}
                   <Link
                     to={`/product/${product.id}`}
-                    className={`absolute inset-0 flex items-center justify-center bg-ocean-deep/50 opacity-0 group-hover:opacity-100 transition-opacity ${
+                    aria-label={`查看 ${product.name} 详情`}
+                    className={`absolute inset-0 flex items-center justify-center bg-ocean-deep/30 sm:bg-ocean-deep/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity active:bg-ocean-deep/60 ${
                       viewMode === 'list' ? 'hidden' : ''
                     }`}
                   >
-                    <span className="flex items-center gap-2 px-4 py-2 bg-white text-ocean-deep rounded-full text-sm font-medium">
+                    <span className="flex items-center gap-2 px-4 py-2 bg-white text-ocean-deep rounded-full text-sm font-medium shadow-lg">
                       <Eye className="w-4 h-4" />
                       查看详情
                     </span>
