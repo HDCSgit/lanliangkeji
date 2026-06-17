@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { RichEditor } from '@/components/RichEditor';
 
 const AdminNews: React.FC = () => {
   const [news, setNews] = useState<News[]>([]);
@@ -312,13 +313,17 @@ const AdminNews: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">正文内容</label>
-              <textarea
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                rows={8}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:border-ocean-blue focus:outline-none resize-none"
-                placeholder="输入新闻正文内容"
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                正文内容
+                <span className="text-xs text-gray-400 font-normal">
+                  (支持从公众号粘贴带排版的文章)
+                </span>
+              </label>
+              <RichEditor
+                value={formData.content || ''}
+                onChange={(html) => setFormData({ ...formData, content: html })}
+                placeholder="输入正文,或直接粘贴公众号文章(自动保留格式)"
+                minHeight={300}
               />
             </div>
 

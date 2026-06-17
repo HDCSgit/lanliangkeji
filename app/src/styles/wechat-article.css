@@ -1,0 +1,177 @@
+/* 公众号文章风格 (仿微信订阅号文章排版)
+ * 引用方式: <div className="wechat-article" dangerouslySetInnerHTML={{__html: html}} />
+ *
+ * 风格参考:微信订阅号默认编辑器,字号 17px 行高 1.75,引用块橙色左边框,
+ *          链接蓝色,代码块浅灰底,图片圆角 4px 居中,二级标题底部橙红线。
+ */
+
+.wechat-article {
+  font-size: 17px;
+  line-height: 1.75;
+  color: #333;
+  word-break: break-word;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.wechat-article > *:first-child { margin-top: 0; }
+.wechat-article > *:last-child { margin-bottom: 0; }
+
+/* 段落 */
+.wechat-article p {
+  margin: 0 0 18px 0;
+  text-align: justify;
+}
+
+/* 标题 */
+.wechat-article h1,
+.wechat-article h2,
+.wechat-article h3,
+.wechat-article h4,
+.wechat-article h5,
+.wechat-article h6 {
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 28px 0 16px 0;
+  color: #1a1a1a;
+}
+.wechat-article h1 { font-size: 24px; }
+.wechat-article h2 {
+  font-size: 20px;
+  border-left: 4px solid #fa9d3b;
+  padding-left: 12px;
+}
+.wechat-article h3 { font-size: 18px; }
+.wechat-article h4 { font-size: 17px; }
+.wechat-article h5 { font-size: 16px; }
+.wechat-article h6 {
+  font-size: 16px;
+  color: #777;
+}
+
+/* 强调 */
+.wechat-article strong { color: #1a1a1a; font-weight: 700; }
+.wechat-article em { font-style: italic; }
+.wechat-article u { text-decoration: underline; }
+.wechat-article s,
+.wechat-article strike { text-decoration: line-through; }
+
+/* 链接 */
+.wechat-article a {
+  color: #576b95;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(87, 107, 149, 0.4);
+}
+.wechat-article a:hover { border-bottom-color: #576b95; }
+
+/* 引用 */
+.wechat-article blockquote {
+  margin: 18px 0;
+  padding: 10px 16px;
+  background: #f7f7f7;
+  border-left: 4px solid #fa9d3b;
+  color: #555;
+  border-radius: 0 4px 4px 0;
+}
+.wechat-article blockquote p { margin: 6px 0; }
+
+/* 列表 */
+.wechat-article ul,
+.wechat-article ol {
+  margin: 16px 0;
+  padding-left: 28px;
+}
+.wechat-article li { margin: 6px 0; }
+.wechat-article ul li { list-style: disc; }
+.wechat-article ol li { list-style: decimal; }
+
+/* 行内代码 */
+.wechat-article code {
+  background: #f0f0f0;
+  color: #d6336c;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 0.9em;
+  word-break: break-word;
+}
+
+/* 代码块 */
+.wechat-article pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px 18px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 18px 0;
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.wechat-article pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* 分割线 */
+.wechat-article hr {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #ccc 20%, #ccc 80%, transparent);
+  margin: 28px 0;
+}
+
+/* 图片 */
+.wechat-article img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 18px auto;
+  border-radius: 4px;
+}
+
+/* 视频 */
+.wechat-article video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 18px auto;
+  border-radius: 4px;
+}
+
+/* iframe (嵌入视频/网页) */
+.wechat-article iframe {
+  max-width: 100%;
+  border: 0;
+  margin: 18px 0;
+}
+
+/* 表格 */
+.wechat-article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0;
+  font-size: 15px;
+}
+.wechat-article th,
+.wechat-article td {
+  border: 1px solid #e5e5e5;
+  padding: 8px 12px;
+  text-align: left;
+}
+.wechat-article th {
+  background: #f7f7f7;
+  font-weight: 600;
+}
+
+/* 高亮文本(wangEditor/公众号背景色) */
+.wechat-article mark {
+  background: #fff3a3;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* 上下标 */
+.wechat-article sup { font-size: 0.75em; vertical-align: super; }
+.wechat-article sub { font-size: 0.75em; vertical-align: sub; }

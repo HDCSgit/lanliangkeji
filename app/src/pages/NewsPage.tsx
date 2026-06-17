@@ -258,13 +258,10 @@ const NewsPage: React.FC = () => {
                   alt={selectedNews.title}
                   className="w-full h-64 object-cover rounded-xl mb-6"
                 />
-                <div className="prose prose-ocean max-w-none">
-                  {selectedNews.content.split('\n\n').map((paragraph, i) => (
-                    <p key={i} className="text-gray-600 leading-relaxed mb-4">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
+                <div
+                  className="wechat-article"
+                  dangerouslySetInnerHTML={{ __html: selectedNews.content || '' }}
+                />
               </div>
             </>
           )}
