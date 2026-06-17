@@ -130,10 +130,6 @@ const LoginPage: React.FC = () => {
               {isRegister ? '已有账号？去登录' : '没有账号？去注册'}
             </button>
           </div>
-
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb', textAlign: 'center' }}>
-            <p style={{ color: '#9ca3af', fontSize: '12px' }}>测试账号：13800138000（任意密码）</p>
-          </div>
         </div>
       </div>
     </div>
