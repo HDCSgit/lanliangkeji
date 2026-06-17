@@ -89,6 +89,11 @@ def create_product(
         features=data.features,
         is_active=data.is_active,
         order=data.order,
+        # 运费规则(草稿创建时全部默认包邮)
+        shipping_enabled=data.shipping_enabled,
+        shipping_initial_fee=data.shipping_initial_fee,
+        shipping_per_unit_count=data.shipping_per_unit_count,
+        shipping_per_unit_fee=data.shipping_per_unit_fee,
     )
     # image 镜像 cover_images[0]
     product.image = cover_images[0] if cover_images else ""
@@ -138,24 +143,56 @@ def update_product(
     product.features = data.features
     product.is_active = data.is_active
     product.order = data.order
+    # 运费规则
+    product.shipping_enabled = data.shipping_enabled
+    product.shipping_initial_fee = data.shipping_initial_fee
+    product.shipping_per_unit_count = data.shipping_per_unit_count
+    product.shipping_per_unit_fee = data.shipping_per_unit_fee
     # 镜像 image
     product.image = cover_images[0] if cover_images else ""
 
-    # 删除旧规格并重建
-    db.query(ProductSpec).filter(ProductSpec.product_id == product_id).delete()
+    # 规格 upsert(按 name 匹配,保持 spec.id 稳定,避免 cart_items.spec_id 失效)
+    # - 旧库里有同 name 的 spec → 更新字段(id 不变)
+    # - 旧库里没的 → 新建
+    # - 新列表里没出现的旧 spec → 删除(用户主动删的)
+    old_specs = (
+        db.query(ProductSpec)
+        .filter(ProductSpec.product_id == product_id)
+        .all()
+    )
+    old_specs_by_name = {s.name: s for s in old_specs}
+    new_names = {s.name for s in data.specs if s.name}
+
+    # 删除被废弃的 spec(不在新列表里)
+    for old in old_specs:
+        if old.name not in new_names:
+            db.delete(old)
     db.flush()
 
+    # upsert
     for spec_data in data.specs:
-        spec = ProductSpec(
-            product_id=product.id,
-            name=spec_data.name,
-            unit=spec_data.unit,
-            price=spec_data.price,
-            stock=spec_data.stock,
-            min_order=spec_data.min_order,
-            is_active=spec_data.is_active,
-        )
-        db.add(spec)
+        if not spec_data.name:
+            continue
+        existing = old_specs_by_name.get(spec_data.name)
+        if existing:
+            # 命中旧 spec:更新字段,id 保持不变 → cart_items.spec_id 仍有效
+            existing.unit = spec_data.unit
+            existing.price = spec_data.price
+            existing.stock = spec_data.stock
+            existing.min_order = spec_data.min_order
+            existing.is_active = spec_data.is_active
+        else:
+            # 新 spec:插入
+            spec = ProductSpec(
+                product_id=product.id,
+                name=spec_data.name,
+                unit=spec_data.unit,
+                price=spec_data.price,
+                stock=spec_data.stock,
+                min_order=spec_data.min_order,
+                is_active=spec_data.is_active,
+            )
+            db.add(spec)
 
     db.commit()
     db.refresh(product)

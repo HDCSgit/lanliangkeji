@@ -4,7 +4,7 @@ from sqlalchemy import desc
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user, require_auditor_or_admin
 from app.models.models import (
-    User, Order, OrderItem, CartItem, ProductSpec, Address, Logistics, LogisticsUpdate, PaymentOrder, now_utc
+    User, Order, OrderItem, CartItem, Product, ProductSpec, Address, Logistics, LogisticsUpdate, PaymentOrder, now_utc
 )
 from app.schemas.schemas import ApiResponse, OrderCreate, OrderOut, OrderStatusUpdate
 from app.utils.generators import generate_order_no
@@ -23,6 +23,41 @@ def _check_order_access(order: Order, current_user: User) -> bool:
     if current_user.role in (UserRole.SYSADMIN, UserRole.AUDITOR):
         return True
     return order.user_id == current_user.id
+
+
+def _calc_shipping_fee_for_quantity(product, qty: int) -> float:
+    """根据商品的运费规则算单商品的运费(同一商品买多件时按阶梯)。
+
+    规则:
+    - shipping_enabled=False → 包邮,返回 0
+    - 第一件收 shipping_initial_fee
+    - 超过 1 件的部分,每 shipping_per_unit_count 件加 shipping_per_unit_fee
+    """
+    if not product or not getattr(product, "shipping_enabled", False):
+        return 0.0
+    if qty <= 0:
+        return 0.0
+    initial = float(getattr(product, "shipping_initial_fee", 0) or 0)
+    per_unit_count = int(getattr(product, "shipping_per_unit_count", 1) or 1)
+    per_unit_fee = float(getattr(product, "shipping_per_unit_fee", 0) or 0)
+    if qty == 1:
+        return initial
+    extra_qty = qty - 1
+    extra_units = (extra_qty + per_unit_count - 1) // per_unit_count  # 向上取整
+    return initial + extra_units * per_unit_fee
+
+
+def _calc_total_shipping_fee(cart_items, product_map) -> float:
+    """累加购物车里每个商品的运费(按各自规格对应的商品规则)。"""
+    total = 0.0
+    # 同一商品可能分多个规格,按 product_id 聚合数量后再算一次
+    qty_by_product: dict[str, int] = {}
+    for item in cart_items:
+        qty_by_product[item.product_id] = qty_by_product.get(item.product_id, 0) + item.quantity
+    for product_id, qty in qty_by_product.items():
+        product = product_map.get(product_id)
+        total += _calc_shipping_fee_for_quantity(product, qty)
+    return round(total, 2)
 
 
 @router.post("/", response_model=ApiResponse)
@@ -62,19 +97,48 @@ def create_order(
     for item in cart_items:
         spec = spec_map.get(item.spec_id)
         if not spec:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"规格不存在: {item.spec_name}",
+            # 兜底:如果 spec_id 失效(产品被改过导致 spec 重建),
+            # 尝试按 (product_id, spec_name) 找回,自动修复 cart_item.spec_id
+            fallback = (
+                db.query(ProductSpec)
+                .filter(
+                    ProductSpec.product_id == item.product_id,
+                    ProductSpec.name == item.spec_name,
+                    ProductSpec.is_active.is_(True),
+                )
+                .with_for_update()
+                .first()
             )
+            if fallback:
+                spec = fallback
+                spec_map[fallback.id] = fallback
+                item.spec_id = fallback.id
+                # 顺便修正 subtotal(price 可能变过)
+                item.price = fallback.price
+                item.subtotal = fallback.price * item.quantity
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"规格不存在: {item.spec_name}",
+                )
         if spec.stock < item.quantity:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"库存不足: {item.product_name} - {item.spec_name}",
             )
 
+    # 按商品加载运费规则(避免在循环里 N+1 查询)
+    product_ids = list({item.product_id for item in cart_items})
+    products = (
+        db.query(Product)
+        .filter(Product.id.in_(product_ids))
+        .all()
+    ) if product_ids else []
+    product_map = {p.id: p for p in products}
+
     # 计算金额
     total_amount = sum(item.subtotal for item in cart_items)
-    shipping_fee = 0.0
+    shipping_fee = _calc_total_shipping_fee(cart_items, product_map)
     discount = 0.0
     final_amount = total_amount + shipping_fee - discount
 
