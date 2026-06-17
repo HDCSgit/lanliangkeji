@@ -1,6 +1,7 @@
 from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -67,6 +68,47 @@ def get_product(product_id: str, db: Session = Depends(get_db)):
     return ApiResponse(success=True, data=ProductOut.model_validate(product), message="获取产品详情成功")
 
 
+# ==================== 批量重排序 ====================
+
+class ReorderProductsRequest(BaseModel):
+    """按期望顺序排列的产品 ID 列表(从最前到最末)"""
+    product_ids: list[str]
+
+
+@router.post("/reorder", response_model=ApiResponse)
+def reorder_products(
+    data: ReorderProductsRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_sysadmin),
+):
+    """
+    按 product_ids 顺序批量更新产品 order(从 10 开始,步长 10,中间留 9 个空位方便插入)。
+
+    算法:
+    - 用 10, 20, 30 ... 这样的步长赋值,后续想插一个新产品到中间,只需要给它一个 15 这样的数
+    - 不在 product_ids 里的产品保持原 order 不变(只更新被传入的产品)
+    """
+    if not data.product_ids:
+        return ApiResponse(success=True, data=None, message="无需排序")
+
+    # 校验:传入的 id 必须都存在
+    existing = db.query(Product).filter(Product.id.in_(data.product_ids)).all()
+    existing_by_id = {p.id: p for p in existing}
+    missing = [pid for pid in data.product_ids if pid not in existing_by_id]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"以下产品不存在: {missing[:5]}{'...' if len(missing) > 5 else ''}",
+        )
+
+    # 按列表顺序赋新 order(10, 20, 30 ...)
+    for idx, pid in enumerate(data.product_ids):
+        existing_by_id[pid].order = (idx + 1) * 10
+
+    db.commit()
+    return ApiResponse(success=True, data=None, message=f"已更新 {len(data.product_ids)} 个产品的排序")
+
+
 @router.post("/", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
     data: ProductCreate,
@@ -79,6 +121,14 @@ def create_product(
     enable_carousel = data.enable_carousel if len(cover_images) >= 2 else False
     detail_images = _normalize_detail_images(data.detail_images)
 
+    # 自动给 order:当前最大值 + 10(避免默认全是 0 排不出顺序)
+    # 如果前端明确传了 order(>0)则尊重前端
+    if data.order and data.order > 0:
+        next_order = data.order
+    else:
+        max_order = db.query(Product.order).order_by(Product.order.desc()).first()
+        next_order = (max_order[0] if max_order and max_order[0] else 0) + 10
+
     product = Product(
         name=data.name,
         category=data.category,
@@ -88,7 +138,7 @@ def create_product(
         enable_carousel=enable_carousel,
         features=data.features,
         is_active=data.is_active,
-        order=data.order,
+        order=next_order,
         # 运费规则(草稿创建时全部默认包邮)
         shipping_enabled=data.shipping_enabled,
         shipping_initial_fee=data.shipping_initial_fee,

@@ -354,6 +354,31 @@ const AdminProducts: React.FC = () => {
     }
   };
 
+  /**
+   * 调整产品排序(上移/下移)
+   * @param index 当前产品在被过滤列表中的位置
+   * @param direction -1 = 上移, +1 = 下移
+   */
+  const handleReorder = async (index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= filteredProducts.length) return;
+    // 复制一份避免直接 mutate state
+    const reordered = [...filteredProducts];
+    const tmp = reordered[index];
+    reordered[index] = reordered[newIndex];
+    reordered[newIndex] = tmp;
+    // 立即更新 UI(乐观更新)
+    setFilteredProducts(reordered);
+    setProducts(reordered);
+    try {
+      await DataStore.reorderProducts(reordered.map((p) => p.id));
+    } catch (e: any) {
+      alert('排序失败: ' + (e?.message || e));
+      // 失败时回滚
+      await loadProducts();
+    }
+  };
+
   // ---- 保存 ----
   const handleSave = async () => {
     // 关键:单价格式 input 是 uncontrolled + onBlur 写回 state,
@@ -529,7 +554,7 @@ const AdminProducts: React.FC = () => {
 
       {/* Products Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredProducts.map((product) => (
+        {filteredProducts.map((product, index) => (
           <div key={product.id} className="bg-white rounded-2xl shadow-card overflow-hidden group">
             <div className="relative h-40">
               <ProductImage
@@ -571,21 +596,43 @@ const AdminProducts: React.FC = () => {
                 <span>价格: <span className="font-medium text-ocean-blue">{priceRange(product)}</span></span>
                 <span>库存: <span className="font-medium">{totalStock(product)}</span></span>
               </div>
-              <div className="flex items-center justify-end gap-2 mt-3">
-                <button
-                  onClick={() => openEditDialog(product)}
-                  className="p-2 hover:bg-ocean-blue/10 text-ocean-blue rounded-lg transition-colors"
-                  title="编辑"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
-                  title="删除"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div className="flex items-center justify-between gap-2 mt-3">
+                {/* 左侧:排序按钮(上移/下移) */}
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => handleReorder(index, -1)}
+                    disabled={index === 0}
+                    className="p-1.5 hover:bg-ocean-blue/10 text-gray-500 hover:text-ocean-blue rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-500"
+                    title="上移一位"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleReorder(index, 1)}
+                    disabled={index === filteredProducts.length - 1}
+                    className="p-1.5 hover:bg-ocean-blue/10 text-gray-500 hover:text-ocean-blue rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-500"
+                    title="下移一位"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* 右侧:编辑/删除 */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEditDialog(product)}
+                    className="p-2 hover:bg-ocean-blue/10 text-ocean-blue rounded-lg transition-colors"
+                    title="编辑"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -814,6 +814,14 @@ export const DataStore = {
     }
   },
 
+  /**
+   * 按 productIds 顺序批量更新产品排序
+   * @param productIds 按期望顺序排列的产品 id 列表(最前到最末)
+   */
+  async reorderProducts(productIds: string[]): Promise<void> {
+    await apiPost<null>('/products/reorder', { product_ids: productIds });
+  },
+
   async getProductById(id: string): Promise<Product | null> {
     try {
       return await apiGet<Product>(`/products/${id}`);
