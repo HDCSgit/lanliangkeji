@@ -25,8 +25,17 @@ systemctl restart lanliang-backend
 sleep 3
 systemctl is-active lanliang-backend | tee -a "$LOG"
 
-log '=== frontend build ==='
+log '=== frontend deps ==='
 cd "$FRONT_DIR"
+# 只装新加的依赖(production only,跳过 devDependencies)
+# 加 --no-audit --no-fund 减少噪声;用 ci 而不是 install 保持 lock 一致
+if [ -f package-lock.json ]; then
+    npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -5 | tee -a "$LOG"
+else
+    npm install --omit=dev --no-audit --no-fund 2>&1 | tail -5 | tee -a "$LOG"
+fi
+
+log '=== frontend build ==='
 chattr -i -R dist/ 2>/dev/null || true
 rm -rf dist
 npm run build 2>&1 | tail -8 | tee -a "$LOG"
