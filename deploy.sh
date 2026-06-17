@@ -28,12 +28,15 @@ systemctl is-active lanliang-backend | tee -a "$LOG"
 log '=== frontend deps ==='
 cd "$FRONT_DIR"
 # 装完整依赖(devDependencies 包含 typescript,vite,各种类型,build 脚本要)
+# 用 NODE_ENV=development 强制装 devDeps(避免之前 .package-lock.json 残留 dev:false 状态)
 # 加 --no-audit --no-fund 减少噪声;用 ci 保持 lock 一致
+export NODE_ENV=development
 if [ -f package-lock.json ]; then
-    npm ci --no-audit --no-fund 2>&1 | tail -8 | tee -a "$LOG"
+    npm ci --include=dev --no-audit --no-fund 2>&1 | tail -8 | tee -a "$LOG"
 else
-    npm install --no-audit --no-fund 2>&1 | tail -8 | tee -a "$LOG"
+    npm install --include=dev --no-audit --no-fund 2>&1 | tail -8 | tee -a "$LOG"
 fi
+unset NODE_ENV
 
 log '=== frontend build ==='
 chattr -i -R dist/ 2>/dev/null || true
