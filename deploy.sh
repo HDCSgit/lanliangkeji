@@ -41,6 +41,16 @@ unset NODE_ENV
 log '=== frontend build ==='
 chattr -i -R dist/ 2>/dev/null || true
 rm -rf dist
+# 锁 vite 在兼容 Node 18 的 7.2.x(vite 7.3+ 要 Node 20.19+)
+# 线上 Node 是 18.20.4,如果 lockfile 里 vite 是 7.3+ build 会卡住/失败
+# 强制装一次让 node_modules 与 build 要求一致(不动 package.json)
+if [ -f node_modules/vite/package.json ]; then
+    current_vite=$(grep '"version"' node_modules/vite/package.json | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+    if [[ "$current_vite" == 7.3* ]]; then
+        log "vite $current_vite 不兼容 Node 18,降级到 ~7.2.4"
+        npm install vite@~7.2.4 --no-audit --no-fund --no-save 2>&1 | tail -3 | tee -a "$LOG"
+    fi
+fi
 npm run build 2>&1 | tee -a "$LOG"
 
 # index.html 不缓存(否则手机端会一直用旧 JS,新代码不生效)
