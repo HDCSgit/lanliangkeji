@@ -122,6 +122,12 @@ def create_order(
                     detail=f"规格不存在: {item.spec_name}",
                 )
         if spec.stock < item.quantity:
+            # 注:库存只在付款成功时扣减,创建订单不预扣
+            # 这里只校验"当前可售卖库存"是否够
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"库存不足: {item.product_name} - {item.spec_name}",
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"库存不足: {item.product_name} - {item.spec_name}",
@@ -164,9 +170,10 @@ def create_order(
     db.add(order)
     db.flush()
 
-    # 创建订单项并扣减库存
+    # 创建订单项
+    # 注意:库存不在这里扣,改到 _mark_paid_and_settle (付款成功时) 才扣
+    # 原因:用户未付款时不应该占用库存,避免"已下单未付"卡住其他买家
     for item in cart_items:
-        spec = spec_map[item.spec_id]
         order_item = OrderItem(
             order_id=order.id,
             product_id=item.product_id,
@@ -180,7 +187,6 @@ def create_order(
             subtotal=item.subtotal,
         )
         db.add(order_item)
-        spec.stock -= item.quantity
 
     # 清空购物车
     for item in cart_items:

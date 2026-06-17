@@ -11,7 +11,7 @@ from app.core.constants import OrderStatus, PaymentMethod, PaymentStatus, Vouche
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user, require_sysadmin
 from app.models.models import (
-    Order, PaymentOrder, PaymentGatewayConfig, ReceivableAccount, Bill, User, Voucher
+    Order, OrderItem, PaymentOrder, PaymentGatewayConfig, ReceivableAccount, Bill, ProductSpec, User, Voucher
 )
 from app.schemas.schemas import (
     ApiResponse,
@@ -148,15 +148,49 @@ def create_payment(
 # ============================================================
 
 def _mark_paid_and_settle(db: Session, payment: PaymentOrder) -> None:
-    """统一的支付成功处理:更新 PaymentOrder + Order + 写账单。"""
+    """统一的支付成功处理:更新 PaymentOrder + Order + 扣减库存 + 写账单。"""
     if payment.status == PaymentStatus.PAID:
         return  # 幂等
     now = datetime.now(timezone.utc)
-    payment.status = PaymentStatus.PAID
-    payment.paid_at = now
+
+    # 1. 先扣库存(用 with_for_update 锁,避免并发超卖)
+    #    若库存不足,把 order 标 PAID_BUT_OUT_OF_STOCK + 退款(此处简化为 raise,前端轮询会感知失败)
+    order = payment.order
+    items = (
+        db.query(OrderItem)
+        .filter(OrderItem.order_id == order.id)
+        .all()
+    )
+    if items:
+        spec_ids = [i.spec_id for i in items]
+        specs = (
+            db.query(ProductSpec)
+            .filter(ProductSpec.id.in_(spec_ids))
+            .with_for_update()
+            .all()
+        )
+        spec_map = {s.id: s for s in specs}
+        # 二次校验:所有 spec 都存在 + 库存够
+        for item in items:
+            spec = spec_map.get(item.spec_id)
+            if not spec:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"规格已下架: {item.spec_name},无法完成支付",
+                )
+            if spec.stock < item.quantity:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"库存不足: {item.product_name} - {item.spec_name},请联系商家",
+                )
+        # 扣减
+        for item in items:
+            spec_map[item.spec_id].stock -= item.quantity
     db.flush()
 
-    order = payment.order
+    # 2. 标记 payment + order + 写账单
+    payment.status = PaymentStatus.PAID
+    payment.paid_at = now
     order.status = OrderStatus.PAID
     order.payment_time = now
     order.payment_method = payment.payment_method
