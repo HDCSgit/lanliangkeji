@@ -22,6 +22,8 @@ const ProductsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   // 移动端:卡片进入视口时,显示玻璃"了解详情"浮层
   const [visibleProductIds, setVisibleProductIds] = useState<Set<string>>(new Set());
+  // 点击涟漪:{x, y, id}[] — 浪漫感:从点击点发出 3 圈错开延迟的渐变涟漪
+  const [ripples, setRipples] = useState<Array<{ x: number; y: number; id: number }>>([]);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -145,6 +147,18 @@ const ProductsPage: React.FC = () => {
 
   const categories = ['all', ...Array.from(new Set(products.map((p) => p.category)))];
 
+  // 卡片点击:先发射涟漪 → 600ms 后跳转(让动画完整呈现)
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>, productId: string) => {
+    // 只对真实点击做涟漪(键盘 Enter/Space 走 onKeyDown 单独处理)
+    if (e.detail === 0) return;
+    const id = Date.now() + Math.random();
+    setRipples((prev) => [...prev, { x: e.clientX, y: e.clientY, id }]);
+    // 1s 后清理 ripple state,防长时间堆积
+    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 1200);
+    // 600ms 跳转(动画主波纹扩散到位时切换)
+    setTimeout(() => navigate(`/product/${productId}`), 600);
+  };
+
   const categoryLabels: Record<string, string> = {
     all: '全部产品',
     '海洋生物制品': '海洋生物制品',
@@ -154,7 +168,30 @@ const ProductsPage: React.FC = () => {
   };
 
   return (
-    <div ref={pageRef} className="min-h-screen pt-20">
+    <div ref={pageRef} className="min-h-screen pt-20 relative">
+      {/* 点击涟漪层(全屏,pointer-events-none,不挡操作) */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden">
+        {ripples.map((r) => (
+          <React.Fragment key={r.id}>
+            {/* 主波纹 */}
+            <span
+              className="absolute rounded-full ripple-main"
+              style={{ left: r.x, top: r.y }}
+            />
+            {/* 第二圈 错开 0.12s */}
+            <span
+              className="absolute rounded-full ripple-second"
+              style={{ left: r.x, top: r.y }}
+            />
+            {/* 第三圈 错开 0.24s */}
+            <span
+              className="absolute rounded-full ripple-third"
+              style={{ left: r.x, top: r.y }}
+            />
+          </React.Fragment>
+        ))}
+      </div>
+
       {/* Page Header */}
       <section className="relative py-20 lg:py-32 bg-ocean-deep overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -252,7 +289,7 @@ const ProductsPage: React.FC = () => {
                 data-product-id={product.id}
                 role="link"
                 tabIndex={0}
-                onClick={() => navigate(`/product/${product.id}`)}
+                onClick={(e) => handleCardClick(e, product.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
