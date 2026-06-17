@@ -111,6 +111,22 @@ def get_nav(db: Session = Depends(get_db)):
     return ApiResponse(success=True, data=_nav_tree(items))
 
 
+@router.get("/pages", response_model=ApiResponse)
+def list_active_pages(db: Session = Depends(get_db)):
+    """公开:获取所有 active 页面列表(给前端 getPages() 用)"""
+    pages = (
+        db.query(Page)
+        .filter(Page.is_active == True)
+        .order_by(Page.name.asc())
+        .all()
+    )
+    return ApiResponse(
+        success=True,
+        data=[PageOut.model_validate(p) for p in pages],
+        message="获取页面列表成功",
+    )
+
+
 @router.get("/pages/{slug}", response_model=ApiResponse)
 def get_page_by_slug(slug: str, db: Session = Depends(get_db)):
     page = db.query(Page).filter(Page.slug == slug, Page.is_active == True).first()
