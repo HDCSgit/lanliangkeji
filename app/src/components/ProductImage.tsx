@@ -106,12 +106,12 @@ const ProductImage: React.FC<ProductImageProps> = ({
     >
       {/* 骨架屏动画层 - 始终存在,加载完成后会盖住 */}
       {!loaded && !error && (
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 bg-[length:200%_100%] animate-shimmer" />
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer z-[1]" />
       )}
 
       {/* 失败占位 */}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 bg-gray-50">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 bg-gray-50 z-[2]">
           <ImageIcon className="w-10 h-10 mb-1" />
           <span className="text-xs">{fallbackText}</span>
         </div>
@@ -119,7 +119,7 @@ const ProductImage: React.FC<ProductImageProps> = ({
 
       {/* 空 src 也显示占位 */}
       {!src && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 bg-gray-50">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 bg-gray-50 z-[2]">
           <ImageIcon className="w-10 h-10 mb-1" />
           <span className="text-xs">{fallbackText}</span>
         </div>
@@ -130,13 +130,18 @@ const ProductImage: React.FC<ProductImageProps> = ({
         <img
           src={sizedSrc}
           alt={alt}
-          loading={lazy && !priority ? 'lazy' : 'eager'}
-          decoding="async"
+          loading={priority ? 'eager' : 'lazy'}
+          decoding={priority ? 'sync' : 'async'}
+          // priority 图(首屏大图/LCP)显式标 high,让浏览器立即下载
+          // 不加这个 Chrome/移动 WebView 会把 eager 图也排到低优先级,导致首屏空白几百毫秒
+          {...(priority ? { fetchPriority: 'high' as any } : { fetchPriority: 'auto' as any })}
           onLoad={() => setLoaded(true)}
           onError={() => setError(true)}
-          className={`w-full h-full object-cover transition-all duration-500 ease-out ${
-            loaded ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-md scale-105'
-          } ${imgClassName}`}
+          className={`w-full h-full object-cover relative z-[2] ${
+            priority
+              ? 'opacity-100'  // priority 图不隐藏:浏览器下载中是空白也比透明强,且 onLoad 触发就能看见
+              : (loaded ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-md scale-105')
+          } transition-all duration-500 ease-out ${imgClassName}`}
         />
       )}
     </div>
