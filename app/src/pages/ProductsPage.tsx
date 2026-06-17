@@ -147,16 +147,16 @@ const ProductsPage: React.FC = () => {
 
   const categories = ['all', ...Array.from(new Set(products.map((p) => p.category)))];
 
-  // 卡片点击:先发射涟漪 → 600ms 后跳转(让动画完整呈现)
+  // 卡片点击:先发射风吹粒子 → 380ms 后跳转(一阵风飘过的时长)
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>, productId: string) => {
     // 只对真实点击做涟漪(键盘 Enter/Space 走 onKeyDown 单独处理)
     if (e.detail === 0) return;
     const id = Date.now() + Math.random();
     setRipples((prev) => [...prev, { x: e.clientX, y: e.clientY, id }]);
-    // 1s 后清理 ripple state,防长时间堆积
-    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 1200);
-    // 600ms 跳转(动画主波纹扩散到位时切换)
-    setTimeout(() => navigate(`/product/${productId}`), 600);
+    // 500ms 后清理 state
+    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 500);
+    // 260ms 跳转(苹果节奏:点击后 1-2 帧感知反馈,马上切换)
+    setTimeout(() => navigate(`/product/${productId}`), 260);
   };
 
   const categoryLabels: Record<string, string> = {
@@ -167,28 +167,16 @@ const ProductsPage: React.FC = () => {
     '原料供应': '原料供应',
   };
 
+  // 不在 ProductsPage 内嵌 IoGlow,挪到文件底部组件定义,避免每次 render 重新声明
+
   return (
     <div ref={pageRef} className="min-h-screen pt-20 relative">
-      {/* 点击涟漪层(全屏,pointer-events-none,不挡操作) */}
+      {/* 点击柔光层(全屏,pointer-events-none,不挡操作)
+         - 苹果风:从点击点一个柔和的白色/蓝色光圈快速扩散消失
+         - 单个不堆叠,克制;~280ms 完成 */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden">
         {ripples.map((r) => (
-          <React.Fragment key={r.id}>
-            {/* 主波纹 */}
-            <span
-              className="absolute rounded-full ripple-main"
-              style={{ left: r.x, top: r.y }}
-            />
-            {/* 第二圈 错开 0.12s */}
-            <span
-              className="absolute rounded-full ripple-second"
-              style={{ left: r.x, top: r.y }}
-            />
-            {/* 第三圈 错开 0.24s */}
-            <span
-              className="absolute rounded-full ripple-third"
-              style={{ left: r.x, top: r.y }}
-            />
-          </React.Fragment>
+          <IoGlow key={r.id} x={r.x} y={r.y} />
         ))}
       </div>
 
@@ -430,6 +418,21 @@ const ProductsPage: React.FC = () => {
       </section>
 
     </div>
+  );
+};
+
+/**
+ * 苹果风柔光:从点击点扩散的单个柔和光圈
+ * - 白色中心 → 海洋蓝 → 透明 的 radial-gradient
+ * - 280ms 快速消失,克制不抢戏
+ * - 配合卡片 :active 收缩反馈,营造"被按下的物理感"
+ */
+const IoGlow: React.FC<{ x: number; y: number }> = ({ x, y }) => {
+  return (
+    <span
+      className="ios-glow"
+      style={{ left: `${x}px`, top: `${y}px` }}
+    />
   );
 };
 

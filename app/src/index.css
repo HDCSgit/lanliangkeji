@@ -411,67 +411,45 @@
 
 /* Lenis CSS 已废弃 (package 仍存在但未初始化,留着不影响) */
 
-/* ====== 产品中心点击涟漪动效 ======
-   - 从点击点发射 3 圈错开延迟的渐变涟漪
-   - 海洋蓝/青色 品牌色,radial-gradient 渐变到透明
-   - cubic-bezier(0.16, 1, 0.3, 1) ease-out 流畅的减速
-   - 主波 0.9s,二三波错开 0.12s/0.24s 营造"涟漪阵阵"感
+/* ====== 产品中心点击动效(苹果风) ======
+   - 单个柔和光圈 ios-glow 从点击点快速扩散消失
+   - 配合卡片 :active 微缩反馈(scale 0.97)
+   - 整体节奏:点击 → 80ms 收缩反馈 → 280ms 光圈扩散 → 260ms 跳详情
+   - cubic-bezier(0.25, 0.46, 0.45, 0.94) 苹果标准 ease-out
 */
-@keyframes ripple-expand {
+@keyframes ios-glow-expand {
   0% {
     width: 0;
     height: 0;
-    opacity: 0.6;
-    border-width: 2px;
-  }
-  60% {
-    opacity: 0.35;
+    opacity: 0.55;
   }
   100% {
-    width: 180vmax;        /* 用 vmax 让涟漪在任意屏幕都扩到底 */
-    height: 180vmax;
+    width: 360px;
+    height: 360px;
     opacity: 0;
-    border-width: 0.5px;
   }
 }
-.ripple-main,
-.ripple-second,
-.ripple-third {
-  /* 通用基础:固定 0 点在元素中心 */
-  margin-left: 0;
-  margin-top: 0;
+.ios-glow {
+  position: fixed;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 9999;
   transform: translate(-50%, -50%);
   background: radial-gradient(
     circle,
-    rgba(26, 111, 196, 0.45) 0%,
-    rgba(56, 178, 192, 0.3) 30%,
-    rgba(125, 211, 252, 0.1) 60%,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(26, 111, 196, 0.32) 28%,
+    rgba(56, 178, 192, 0.14) 55%,
     rgba(255, 255, 255, 0) 75%
   );
-  border: 2px solid rgba(26, 111, 196, 0.55);
-  box-shadow:
-    0 0 24px rgba(26, 111, 196, 0.4),
-    inset 0 0 24px rgba(255, 255, 255, 0.15);
-  animation: ripple-expand 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: width, height, opacity, border-width;
+  box-shadow: 0 0 32px rgba(26, 111, 196, 0.25);
+  animation: ios-glow-expand 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  will-change: width, height, opacity;
 }
-.ripple-second {
-  animation-delay: 0.12s;
-  border-color: rgba(56, 178, 192, 0.45);
-  background: radial-gradient(
-    circle,
-    rgba(56, 178, 192, 0.35) 0%,
-    rgba(26, 111, 196, 0.2) 35%,
-    rgba(255, 255, 255, 0) 70%
-  );
-}
-.ripple-third {
-  animation-delay: 0.24s;
-  border-color: rgba(125, 211, 252, 0.45);
-  background: radial-gradient(
-    circle,
-    rgba(125, 211, 252, 0.3) 0%,
-    rgba(255, 255, 255, 0.05) 40%,
-    rgba(255, 255, 255, 0) 65%
-  );
+
+/* 卡片:active 反馈 — 微缩,营造被按下的物理感 */
+.product-item:active {
+  transform: scale(0.97) translateY(0) !important;
+  transition: transform 90ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 4px 12px rgba(10, 35, 66, 0.12);
 }
