@@ -20,6 +20,8 @@ const ProductsPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // 移动端:卡片进入视口时,显示玻璃"了解详情"浮层
+  const [visibleProductIds, setVisibleProductIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -90,6 +92,54 @@ const ProductsPage: React.FC = () => {
 
     return () => {
       ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
+    };
+  }, [filteredProducts]);
+
+  // 移动端"了解详情"玻璃浮层:卡片进入视口才显示
+  // - 桌面端:hover 触发(用 CSS,不用 JS)
+  // - 移动端:无 hover,用 IntersectionObserver 检测进入视口
+  // - 桌面端 sm: breakpoint(640px+)认为有 hover,IO 不参与(避免冲突)
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    // 仅在窄屏启用 IO(避免桌面端没必要的 state 抖动)
+    const isCoarsePointer = window.matchMedia('(hover: none)').matches;
+    if (!isCoarsePointer) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisibleProductIds((prev) => {
+          let changed = false;
+          const next = new Set(prev);
+          entries.forEach((entry) => {
+            const id = entry.target.getAttribute('data-product-id');
+            if (!id) return;
+            if (entry.isIntersecting) {
+              if (!next.has(id)) {
+                next.add(id);
+                changed = true;
+              }
+            } else {
+              if (next.has(id)) {
+                next.delete(id);
+                changed = true;
+              }
+            }
+          });
+          return changed ? next : prev;
+        });
+      },
+      { threshold: 0.45, rootMargin: '0px 0px -10% 0px' },
+    );
+
+    // 下一帧绑定(等 DOM 完成)
+    const raf = requestAnimationFrame(() => {
+      const cards = document.querySelectorAll<HTMLElement>('[data-product-id]');
+      cards.forEach((el) => observer.observe(el));
+    });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
     };
   }, [filteredProducts]);
 
@@ -193,9 +243,13 @@ const ProductsPage: React.FC = () => {
                 : 'space-y-4'
             }`}
           >
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product) => {
+              // 移动端用 IO 触发的 visible,桌面端永远 false(用 hover CSS 显)
+              const showOverlay = visibleProductIds.has(product.id);
+              return (
               <div
                 key={product.id}
+                data-product-id={product.id}
                 role="link"
                 tabIndex={0}
                 onClick={() => navigate(`/product/${product.id}`)}
@@ -223,27 +277,42 @@ const ProductsPage: React.FC = () => {
                     imgClassName="group-hover:scale-110 transition-transform duration-500"
                     sizeHint="thumb"
                   />
-                  {/* 渐变遮罩 - pointer-events-none,不挡 click */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-ocean-deep/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  {/* 渐变遮罩 - 桌面端 hover 时加深,移动端依赖 IO 触发时加深 */}
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-t from-ocean-deep/70 via-ocean-deep/30 to-transparent transition-opacity duration-500 pointer-events-none ${
+                      showOverlay ? 'opacity-100' : 'opacity-0 sm:group-hover:opacity-100'
+                    }`}
+                  />
                   {/* 
-                    浮层"查看详情" 提示:
-                    - 移动端:无 hover,默认显(避免用户没线索)
-                    - 桌面端:hover 才显
-                    - pointer-events-none:只是视觉提示,不拦截 click,
-                      click 事件会冒泡到外层 .product-item 触发 navigate
+                    玻璃"了解详情"浮层:
+                    - 桌面端:hover 显(纯 CSS)
+                    - 移动端:卡片进入视口 45% 时显(IO 控制,使用 useState)
+                    - 玻璃效果:backdrop-blur + bg-white/20 + border-white/30
+                    - pointer-events-none:不拦截 click,事件透传到 .product-item
                   */}
                   <div
                     aria-hidden="true"
-                    className={`absolute inset-0 flex items-center justify-center bg-ocean-deep/30 sm:bg-ocean-deep/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pointer-events-none ${
+                    className={`absolute inset-0 z-[3] flex items-center justify-center transition-opacity duration-500 pointer-events-none ${
                       viewMode === 'list' ? 'hidden' : ''
+                    } ${
+                      showOverlay
+                        ? 'opacity-100'
+                        : 'opacity-0 sm:opacity-0 sm:group-hover:opacity-100'
                     }`}
                   >
-                    <span className="flex items-center gap-2 px-4 py-2 bg-white text-ocean-deep rounded-full text-sm font-medium shadow-lg">
-                      <Eye className="w-4 h-4" />
-                      查看详情
+                    <span className="
+                      inline-flex items-center gap-2 px-5 py-2.5
+                      rounded-full
+                      bg-white/15 backdrop-blur-md
+                      border border-white/30
+                      text-white text-sm font-medium
+                      shadow-[0_8px_32px_rgba(10,35,66,0.35)]
+                    ">
+                      了解详情
+                      <ChevronRight className="w-4 h-4" />
                     </span>
                   </div>
-                  <div className="absolute top-3 left-3 pointer-events-none">
+                  <div className="absolute top-3 left-3 pointer-events-none z-[2]">
                     <span className="px-2 py-1 bg-white/90 backdrop-blur-sm text-ocean-blue text-xs font-medium rounded-full">
                       {product.category}
                     </span>
@@ -292,7 +361,8 @@ const ProductsPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Empty State */}
