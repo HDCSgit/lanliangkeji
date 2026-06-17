@@ -115,6 +115,15 @@ class ProductBase(BaseModel):
     features: List[str] = []
     is_active: bool = True
     order: int = 0
+    # ===== 运费规则 =====
+    # 是否收取运费(关掉则该商品包邮,运费为 0)
+    shipping_enabled: bool = False
+    # 初始运费:第一单(第一件)收多少运费
+    shipping_initial_fee: float = Field(default=0, ge=0)
+    # 每多少件算一个加价单位(比如每 5 件加一次价),最小 1
+    shipping_per_unit_count: int = Field(default=1, ge=1)
+    # 每个加价单位加多少运费(比如每多 5 件加 ¥10)
+    shipping_per_unit_fee: float = Field(default=0, ge=0)
 
 
 class ProductCreate(ProductBase):
@@ -393,6 +402,11 @@ class CartItemOut(BaseModel):
     quantity: int
     subtotal: float
     added_at: datetime
+    # 商品的运费规则(让前端购物车/CheckoutPage 也能直接算出运费预览)
+    shipping_enabled: bool = False
+    shipping_initial_fee: float = 0
+    shipping_per_unit_count: int = 1
+    shipping_per_unit_fee: float = 0
 
     model_config = ConfigDict(from_attributes=True)
 

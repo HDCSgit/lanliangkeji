@@ -151,7 +151,31 @@ const CheckoutPage: React.FC = () => {
   // 只统计被勾选的 items
   const selectedItems = items.filter((i) => selectedIds.has(i.id));
   const subtotal = selectedItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const shippingFee = subtotal > 500 ? 0 : 20;
+
+  // 运费预览:跟后端 _calc_total_shipping_fee 公式一致
+  // 同一商品买多件时按阶梯: 第一件收初始运费 + ceil((qty-1) / per_unit_count) * per_unit_fee
+  const shippingFee = (() => {
+    const qtyByProduct = new Map<string, number>();
+    for (const item of selectedItems) {
+      qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) || 0) + item.quantity);
+    }
+    let total = 0;
+    for (const [productId, qty] of qtyByProduct) {
+      const sample = selectedItems.find((i) => i.productId === productId);
+      if (!sample || !sample.shippingEnabled) continue;
+      if (qty <= 0) continue;
+      const initial = sample.shippingInitialFee || 0;
+      const perCount = sample.shippingPerUnitCount || 1;
+      const perFee = sample.shippingPerUnitFee || 0;
+      if (qty === 1) {
+        total += initial;
+      } else {
+        const extraUnits = Math.ceil((qty - 1) / perCount);
+        total += initial + extraUnits * perFee;
+      }
+    }
+    return Math.round(total * 100) / 100;
+  })();
   const total = subtotal + shippingFee;
 
   const handleCreateOrder = async () => {
@@ -475,11 +499,6 @@ const CheckoutPage: React.FC = () => {
                   </span>
                   <span>{shippingFee === 0 ? '免运费' : `¥${shippingFee.toFixed(2)}`}</span>
                 </div>
-                {shippingFee > 0 && (
-                  <p className="text-xs text-gray-400">
-                    满 ¥500 免运费，还差 ¥{(500 - subtotal).toFixed(2)}
-                  </p>
-                )}
                 <div className="border-t pt-3">
                   <div className="flex justify-between">
                     <span className="font-bold text-ocean-deep">应付金额</span>

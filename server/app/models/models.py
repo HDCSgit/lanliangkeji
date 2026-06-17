@@ -84,6 +84,15 @@ class Product(Base):
     features = Column(JSON, default=list)
     is_active = Column(Boolean, default=True)
     order = Column(Integer, default=0)
+    # ===== 运费规则 =====
+    # 是否收取运费(关掉则包邮,运费显示为 0)
+    shipping_enabled = Column(Boolean, default=False)
+    # 初始运费:第一单(第一件)收多少运费
+    shipping_initial_fee = Column(Float, default=0)
+    # 每多少件算一个加价单位(比如每 5 件加一次价)
+    shipping_per_unit_count = Column(Integer, default=1)
+    # 每个加价单位加多少运费(比如每多 5 件加 ¥10)
+    shipping_per_unit_fee = Column(Float, default=0)
     created_at = Column(DateTime(timezone=True), default=now_utc)
     updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.dependencies.auth import get_current_active_user
@@ -12,6 +12,30 @@ router = APIRouter()
 
 class CartItemUpdate(BaseModel):
     quantity: int = Field(..., ge=1)
+
+
+def _serialize_cart_items(db: Session, items: list[CartItem]) -> list[dict]:
+    """把购物车 items 序列化为带运费规则的 dict。
+
+    CartItem 表本身不存运费规则,需要 join Product 读 shipping_* 字段,
+    这样前端 CheckoutPage / 购物车能直接算出运费预览(跟后端公式一致)。
+    """
+    if not items:
+        return []
+    product_ids = list({item.product_id for item in items})
+    products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+    product_map = {p.id: p for p in products}
+    out = []
+    for item in items:
+        d = CartItemOut.model_validate(item).model_dump()
+        p = product_map.get(item.product_id)
+        if p is not None:
+            d["shipping_enabled"] = bool(getattr(p, "shipping_enabled", False))
+            d["shipping_initial_fee"] = float(getattr(p, "shipping_initial_fee", 0) or 0)
+            d["shipping_per_unit_count"] = int(getattr(p, "shipping_per_unit_count", 1) or 1)
+            d["shipping_per_unit_fee"] = float(getattr(p, "shipping_per_unit_fee", 0) or 0)
+        out.append(d)
+    return out
 
 
 @router.get("/", response_model=ApiResponse)
@@ -26,7 +50,7 @@ def get_cart(
         .order_by(CartItem.added_at.desc())
         .all()
     )
-    return ApiResponse(success=True, data=[CartItemOut.model_validate(item) for item in items], message="获取购物车成功")
+    return ApiResponse(success=True, data=_serialize_cart_items(db, items), message="获取购物车成功")
 
 
 @router.post("/", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
@@ -75,7 +99,7 @@ def add_to_cart(
         existing.subtotal = existing.price * existing.quantity
         db.commit()
         db.refresh(existing)
-        return ApiResponse(success=True, data=CartItemOut.model_validate(existing), message="购物车商品数量已累加")
+        return ApiResponse(success=True, data=_serialize_cart_items(db, [existing])[0], message="购物车商品数量已累加")
 
     item = CartItem(
         user_id=current_user.id,
@@ -92,7 +116,7 @@ def add_to_cart(
     db.add(item)
     db.commit()
     db.refresh(item)
-    return ApiResponse(success=True, data=CartItemOut.model_validate(item), message="添加购物车成功")
+    return ApiResponse(success=True, data=_serialize_cart_items(db, [item])[0], message="添加购物车成功")
 
 
 @router.put("/{item_id}", response_model=ApiResponse)
@@ -115,7 +139,7 @@ def update_cart_item(
     item.subtotal = item.price * data.quantity
     db.commit()
     db.refresh(item)
-    return ApiResponse(success=True, data=CartItemOut.model_validate(item), message="购物车项更新成功")
+    return ApiResponse(success=True, data=_serialize_cart_items(db, [item])[0], message="购物车项更新成功")
 
 
 @router.delete("/{item_id}", response_model=ApiResponse)

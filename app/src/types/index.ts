@@ -63,6 +63,11 @@ export interface Product {
   isActive: boolean;
   order: number;
   createdAt: string;
+  // 运费规则(后管编辑)
+  shippingEnabled?: boolean;
+  shippingInitialFee?: number;
+  shippingPerUnitCount?: number;
+  shippingPerUnitFee?: number;
 }
 
 export interface ProductSpec {

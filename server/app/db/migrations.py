@@ -37,10 +37,18 @@ _STORAGE_CONFIGS_EXTRA_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
 # - cover_images: 封面图数组(JSON)
 # - detail_images: 详情图数组(JSON)
 # - enable_carousel: 是否启用封面轮播
+# - shipping_enabled: 是否收取运费
+# - shipping_initial_fee: 初始运费(第一件收多少)
+# - shipping_per_unit_count: 每多少件算一个加价单位
+# - shipping_per_unit_fee: 每个加价单位加多少运费
 _PRODUCTS_EXTRA_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("cover_images", "JSON", "'[]'"),
     ("detail_images", "JSON", "'[]'"),
     ("enable_carousel", "BOOLEAN", "0"),
+    ("shipping_enabled", "BOOLEAN", "0"),
+    ("shipping_initial_fee", "FLOAT", "0"),
+    ("shipping_per_unit_count", "INTEGER", "1"),
+    ("shipping_per_unit_fee", "FLOAT", "0"),
 )
 
 

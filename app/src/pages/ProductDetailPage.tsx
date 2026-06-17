@@ -156,6 +156,11 @@ const ProductDetailPage: React.FC = () => {
         unit: currentSpec.unit,
         price: currentSpec.price,
         quantity,
+        // 运费规则从前端 product 透传给 cart(后端 cart API 也会回填)
+        shippingEnabled: !!product.shippingEnabled,
+        shippingInitialFee: product.shippingInitialFee ?? 0,
+        shippingPerUnitCount: product.shippingPerUnitCount ?? 1,
+        shippingPerUnitFee: product.shippingPerUnitFee ?? 0,
       });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
@@ -179,6 +184,10 @@ const ProductDetailPage: React.FC = () => {
         unit: currentSpec.unit,
         price: currentSpec.price,
         quantity,
+        shippingEnabled: !!product.shippingEnabled,
+        shippingInitialFee: product.shippingInitialFee ?? 0,
+        shippingPerUnitCount: product.shippingPerUnitCount ?? 1,
+        shippingPerUnitFee: product.shippingPerUnitFee ?? 0,
       });
       navigate('/checkout');
     } catch (e: any) {

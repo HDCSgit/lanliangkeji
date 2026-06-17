@@ -22,6 +22,11 @@ export interface CartItem {
   quantity: number; // 数量
   subtotal: number; // 小计
   addedAt: string;
+  // 商品的运费规则(后管配置,前端 CheckoutPage 用它实时算运费预览)
+  shippingEnabled: boolean;
+  shippingInitialFee: number;
+  shippingPerUnitCount: number;
+  shippingPerUnitFee: number;
 }
 
 // 收货地址
@@ -218,4 +223,9 @@ export interface ProductWithSpecs {
   features: string[];
   isActive: boolean;
   order: number;
+  // 运费规则(后管商品编辑配置)
+  shippingEnabled: boolean;
+  shippingInitialFee: number;
+  shippingPerUnitCount: number;
+  shippingPerUnitFee: number;
 }
