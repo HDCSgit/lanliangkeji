@@ -51,7 +51,7 @@ const AdminStorage: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  // testing / handleTestQiniu 暂未用(七牛测试逻辑走 handleTestStorage)
   const [testingSF, setTestingSF] = useState(false);
   const [testingSFH5, setTestingSFH5] = useState(false);
   const [sfH5TestTrackingNumber, setSfH5TestTrackingNumber] = useState('');
@@ -90,25 +90,26 @@ const AdminStorage: React.FC = () => {
     }
   };
 
-  const handleTestQiniu = async () => {
-    if (config.provider !== 'qiniu') {
-      setMessage({ type: 'error', text: '请先切换到七牛云模式' });
-      return;
-    }
-    setTesting(true);
-    setMessage(null);
-    try {
-      const result = await apiPost<{ buckets: string[] }>('/admin/storage/test-qiniu', {});
-      setMessage({
-        type: 'success',
-        text: `七牛云连接成功！可用 Bucket: ${result.buckets?.join(', ') || '无'}`,
-      });
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || '连接测试失败' });
-    } finally {
-      setTesting(false);
-    }
-  };
+  // handleTestQiniu 暂未用(逻辑走 handleTestStorage)
+  // const handleTestQiniu = async () => {
+  //   if (config.provider !== 'qiniu') {
+  //     setMessage({ type: 'error', text: '请先切换到七牛云模式' });
+  //     return;
+  //   }
+  //   setTesting(true);
+  //   setMessage(null);
+  //   try {
+  //     const result = await apiPost<{ buckets: string[] }>('/admin/storage/test-qiniu', {});
+  //     setMessage({
+  //       type: 'success',
+  //       text: `七牛云连接成功！可用 Bucket: ${result.buckets?.join(', ') || '无'}`,
+  //     });
+  //   } catch (error: any) {
+  //     setMessage({ type: 'error', text: error.message || '连接测试失败' });
+  //   } finally {
+  //     setTesting(false);
+  //   }
+  // };
 
   const handleTestSF = async () => {
     setTestingSF(true);

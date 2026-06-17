@@ -1,10 +1,11 @@
-from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Dict, Any, Optional, Literal
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.dependencies.auth import require_sysadmin, require_auditor_or_admin
+from app.services.storage_service import save_upload_file
 from app.models.models import (
     User,
     SiteConfig,
@@ -97,6 +98,55 @@ def _delete_nav_subtree(db: Session, parent_id: str | None = None) -> None:
     for child in children:
         _delete_nav_subtree(db, child.id)
         db.delete(child)
+
+
+# ==================== 通用上传(图片/文件) ====================
+
+@router.post("/upload", response_model=ApiResponse)
+def admin_upload(
+    file: UploadFile = File(...),
+    kind: Literal["image", "file", "news", "banner", "page"] = Form("image"),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_sysadmin),
+):
+    """
+    通用文件上传(管理员)。
+    - kind=image: 默认,通用图片
+    - kind=news: 新闻封面/详情图(子目录 uploads/news/)
+    - kind=banner: 轮播图
+    - kind=page: 页面配图
+    上传后返回 {"url": "/uploads/<kind>/<hash>.<ext>"} 供前端填到 formData。
+    """
+    # kind 映射到子目录(只是命名,不影响存哪里)
+    sub = kind if kind in ("news", "banner", "page") else "general"
+    try:
+        # 限制: image 类必须 image/*
+        if kind == "image" and file.content_type and not file.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"仅支持图片格式,当前: {file.content_type}",
+            )
+        # news/banner/page 强制 image
+        if kind in ("news", "banner", "page"):
+            if file.content_type and not file.content_type.startswith("image/"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"仅支持图片,当前: {file.content_type}",
+                )
+
+        path = save_upload_file(file, sub, db)
+        return ApiResponse(
+            success=True,
+            data={"url": path},
+            message="上传成功",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"上传失败: {e}",
+        )
 
 
 # ==================== Site Config ====================

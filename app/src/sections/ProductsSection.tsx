@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ArrowRight, Eye, Package } from 'lucide-react';
+import { ArrowRight, Eye } from 'lucide-react';
 import { DataStore } from '@/data/store';
 import type { Product } from '@/types';
 import ProductImage from '@/components/ProductImage';

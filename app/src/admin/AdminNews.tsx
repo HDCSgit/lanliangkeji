@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, EyeOff, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit2, Trash2, Eye, EyeOff, Search, Upload, Loader2 } from 'lucide-react';
 import { DataStore } from '@/data/store';
 import type { News } from '@/types';
 import {
@@ -51,45 +51,73 @@ const AdminNews: React.FC = () => {
     setFilteredNews(loaded);
   };
 
-  const handleSave = async () => {
-    const now = new Date().toISOString().split('T')[0];
-    if (editingNews) {
-      const updated = news.map((n) =>
-        n.id === editingNews.id
-          ? { ...n, ...formData, updatedAt: now } as News
-          : n
-      );
-      await DataStore.setNews(updated);
-    } else {
-      const { id: _, ...formDataWithoutId } = formData as News;
-      const newNews: News = {
-        id: Date.now().toString(),
-        ...formDataWithoutId,
-        views: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await DataStore.setNews([newNews, ...news]);
+  // 上传封面图(暂存)
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const url = await DataStore.uploadFile(file, 'news');
+      setFormData((prev) => ({ ...prev, image: url }));
+    } catch (err: any) {
+      alert('封面上传失败: ' + (err?.message || err));
+    } finally {
+      setUploadingCover(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
     }
-    await loadNews();
-    setIsDialogOpen(false);
-    resetForm();
+  };
+
+  const handleSave = async () => {
+    if (!formData.title?.trim()) {
+      alert('请输入新闻标题');
+      return;
+    }
+    if (!formData.content?.trim()) {
+      alert('请输入正文内容');
+      return;
+    }
+    try {
+      if (editingNews) {
+        // 更新现有
+        await DataStore.updateNews(editingNews.id, formData);
+      } else {
+        // 新建(id/views/createdAt 由后端生成)
+        await DataStore.createNews({
+          ...formData,
+          views: formData.views ?? 0,
+        } as Partial<News>);
+      }
+      await loadNews();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      alert('保存失败: ' + (err?.message || err));
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (confirm('确定要删除这条新闻吗？')) {
-      const updated = news.filter((n) => n.id !== id);
-      await DataStore.setNews(updated);
-      await loadNews();
+      try {
+        await DataStore.deleteNews(id);
+        await loadNews();
+      } catch (err: any) {
+        alert('删除失败: ' + (err?.message || err));
+      }
     }
   };
 
   const handleToggleActive = async (id: string) => {
-    const updated = news.map((n) =>
-      n.id === id ? { ...n, isActive: !n.isActive } : n
-    );
-    await DataStore.setNews(updated);
-    await loadNews();
+    const item = news.find((n) => n.id === id);
+    if (!item) return;
+    try {
+      await DataStore.updateNews(id, { isActive: !item.isActive });
+      await loadNews();
+    } catch (err: any) {
+      alert('操作失败: ' + (err?.message || err));
+    }
   };
 
   const resetForm = () => {
@@ -296,19 +324,49 @@ const AdminNews: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
-              <input
-                type="text"
-                value={formData.image}
-                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:border-ocean-blue focus:outline-none"
-                placeholder="输入图片URL"
-              />
-              {formData.image && (
-                <img
-                  src={formData.image}
-                  alt="Preview"
-                  className="mt-2 w-full h-40 object-cover rounded-lg"
+              <div className="flex items-center gap-2">
+                <input
+                  ref={coverFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverUpload}
+                  disabled={uploadingCover}
+                  className="hidden"
+                  id="news-cover-input"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={uploadingCover}
+                  onClick={() => coverFileRef.current?.click()}
+                >
+                  {uploadingCover ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {uploadingCover ? '上传中…' : '选择图片'}
+                </Button>
+                <span className="text-xs text-gray-500">
+                  支持 jpg/png/webp,自动压缩
+                </span>
+              </div>
+              {formData.image && (
+                <div className="mt-2 relative">
+                  <img
+                    src={formData.image}
+                    alt="Preview"
+                    className="w-full h-40 object-cover rounded-lg border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, image: '' })}
+                    className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded"
+                  >
+                    移除
+                  </button>
+                </div>
               )}
             </div>
 

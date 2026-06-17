@@ -12,7 +12,7 @@ import type {
   Service,
   Stat,
 } from '@/types';
-import { apiGet, apiPut, apiPost, apiDelete } from '@/api/client';
+import { apiGet, apiPut, apiPost, apiDelete, apiClient, extractErrorMessage, type ApiResponse } from '@/api/client';
 
 // Default Site Configuration
 export const defaultSiteConfig: SiteConfig = {
@@ -1120,12 +1120,63 @@ export const DataStore = {
     return { enableCarousel: !!data.enableCarousel };
   },
 
-  async setNews(news: News[]): Promise<void> {
+  // setNews 已废弃:改用单条 CRUD
+  // 保留只是兼容(实际不再调用),参数忽略
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async setNews(_news: News[]): Promise<void> {
+    console.warn('setNews() is deprecated, use createNews/updateNews/deleteNews');
+  },
+
+  async createNews(payload: Partial<News>): Promise<News> {
     try {
-      await apiPut('/admin/site/news', news);
+      return await apiPost<News>('/admin/news', payload);
     } catch (error) {
-      console.error('Failed to save news:', error);
+      console.error('Failed to create news:', error);
       throw error;
+    }
+  },
+
+  async updateNews(id: string, payload: Partial<News>): Promise<News> {
+    try {
+      return await apiPut<News>(`/admin/news/${id}`, { ...payload, id });
+    } catch (error) {
+      console.error('Failed to update news:', error);
+      throw error;
+    }
+  },
+
+  async deleteNews(id: string): Promise<void> {
+    try {
+      await apiDelete(`/admin/news/${id}`);
+    } catch (error) {
+      console.error('Failed to delete news:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 通用文件上传(管理员)。后端 POST /api/v1/admin/upload。
+   * @param file File 对象
+   * @param kind 'image' | 'news' | 'banner' | 'page' | 'file'
+   * @returns 返回的 url(以 /uploads 开头,直接赋给 formData.image 即可)
+   */
+  async uploadFile(file: File, kind: 'image' | 'news' | 'banner' | 'page' | 'file' = 'image'): Promise<string> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', kind);
+    try {
+      const res = await apiClient.post<ApiResponse<{ url: string }>>('/admin/upload', form, {
+        // 让 axios 自动算 multipart boundary
+        headers: undefined,
+        transformRequest: (data: unknown) => data,  // 不让 axios 序列化 FormData
+      });
+      if (!res.data.success) {
+        throw new Error(res.data.error || res.data.message || '上传失败');
+      }
+      return res.data.data!.url;
+    } catch (e: any) {
+      console.error('uploadFile failed:', e);
+      throw new Error(extractErrorMessage(e, '上传失败'));
     }
   },
 

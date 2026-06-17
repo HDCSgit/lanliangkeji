@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import {
-  Plus, Edit2, Trash2, Eye, EyeOff, Search,
-  ImageIcon, X, Package, Upload, GripVertical, ChevronUp, ChevronDown
+  Plus, Edit2, Trash2, Search,
+  ImageIcon, X, Package, Upload, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { DataStore } from '@/data/store';
 import userStore from '@/data/userStore';
@@ -236,15 +236,7 @@ const AdminProducts: React.FC = () => {
       return { ...prev, coverImages: arr };
     });
   };
-  const removeCover = (index: number) => {
-    setFormData((prev) => {
-      const arr = [...(prev.coverImages || [])];
-      arr.splice(index, 1);
-      // 删除后,如果 ≤1 张,强制不轮播
-      const enableCarousel = (prev.enableCarousel ?? false) && arr.length >= 2;
-      return { ...prev, coverImages: arr, enableCarousel };
-    });
-  };
+  // removeCover/removeDetail 由 handleRemoveCoverServer/handleRemoveDetailServer 替代(走 API)
 
   // ---- 详情图操作 ----
   const moveDetail = (index: number, direction: -1 | 1) => {
@@ -256,13 +248,7 @@ const AdminProducts: React.FC = () => {
       return { ...prev, detailImages: arr };
     });
   };
-  const removeDetail = (index: number) => {
-    setFormData((prev) => {
-      const arr = [...(prev.detailImages || [])];
-      arr.splice(index, 1);
-      return { ...prev, detailImages: arr };
-    });
-  };
+  // removeDetail 由 handleRemoveDetailServer 替代(走 API)
 
   // ---- 图片上传 ----
   // 永远走 editingProduct.id(openCreateDialog 已经创建了草稿,所以一定有 id)
