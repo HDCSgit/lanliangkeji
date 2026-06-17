@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Smartphone, CreditCard, Building2,
-  Save, AlertCircle, CheckCircle, Globe, Loader2, Lock
+  Save, AlertCircle, CheckCircle, Loader2, Lock
 } from 'lucide-react';
 import { apiGet, apiPut } from '@/api/client';
 import { UserStore } from '@/data/userStore';

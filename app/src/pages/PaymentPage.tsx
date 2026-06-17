@@ -7,8 +7,15 @@ import {
 } from 'lucide-react';
 import { OrderStore } from '@/data/ecommerceStore';
 import { PaymentGateway, PaymentAPI, VoucherStore } from '@/data/paymentGateway';
+import { apiGet } from '@/api/client';
 import type { PaymentMethod } from '@/types/ecommerce';
 import type { Order, ReceivableAccount } from '@/types/ecommerce';
+
+interface AvailableMethod {
+  method: 'wechat' | 'alipay' | 'bank_transfer';
+  name: string;
+  enabled: boolean;
+}
 
 const PaymentPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -25,8 +32,11 @@ const PaymentPage: React.FC = () => {
   const [error, setError] = useState('');
   const [polling, setPolling] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [receivableAccount, setReceivableAccount] = useState<ReceivableAccount | null>(null);
+
+  // 站点级可用支付方式(后管"前端展示"勾了才出现)
+  const [availableMethods, setAvailableMethods] = useState<AvailableMethod[]>([]);
 
   // 对公转账凭证
   const [voucherImage, setVoucherImage] = useState('');
@@ -45,10 +55,11 @@ const PaymentPage: React.FC = () => {
 
   const loadOrder = async () => {
     // 收款账户是站点级配置,PaymentGateway 内部有内存缓存
-    // 这里用 Promise.all 并行拉取(订单详情 + 收款账户),不要串行 await
-    const [found, account] = await Promise.all([
+    // 这里用 Promise.all 并行拉取(订单详情 + 收款账户 + 可用支付方式),不要串行 await
+    const [found, account, methods] = await Promise.all([
       OrderStore.getById(orderId!),
       PaymentGateway.getReceivableAccount(),
+      apiGet<AvailableMethod[]>('/payments/methods').catch(() => [] as AvailableMethod[]),
     ]);
     if (!found) {
       navigate('/orders');
@@ -56,6 +67,12 @@ const PaymentPage: React.FC = () => {
     }
     setOrder(found);
     setReceivableAccount(account);
+    setAvailableMethods(methods || []);
+
+    // 默认选中第一个可用的支付方式(避免选了被关掉的支付方式)
+    if (methods && methods.length > 0) {
+      setPaymentMethod(methods[0].method);
+    }
 
     // 检查是否已有凭证（对公转账）
     if (found.paymentMethod === 'bank_transfer') {
@@ -301,72 +318,65 @@ const PaymentPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Payment Methods */}
+            {/* Payment Methods - 只渲染后管"前端展示"已勾选的支付方式 */}
             <div className="bg-white rounded-2xl shadow-card p-6 mb-4">
               <h2 className="font-bold text-ocean-deep mb-4">选择支付方式</h2>
               <div className="space-y-3">
-                {/* 微信支付 - 始终显示 */}
-                <button
-                  onClick={() => setPaymentMethod('wechat')}
-                  className={`w-full flex items-center gap-4 p-4 border-2 rounded-xl transition-all ${
-                    paymentMethod === 'wechat'
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                    <QrCode className="w-5 h-5 text-white" />
+                {availableMethods.length === 0 && (
+                  <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-xl">
+                    <AlertCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm">暂无可用支付方式,请联系管理员</p>
                   </div>
-                  <div className="text-left flex-1">
-                    <div className="font-medium text-ocean-deep">微信支付</div>
-                    <div className="text-xs text-gray-500">扫码支付</div>
-                  </div>
-                  {paymentMethod === 'wechat' && (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  )}
-                </button>
-
-                {/* 支付宝 - 始终显示 */}
-                <button
-                  onClick={() => setPaymentMethod('alipay')}
-                  className={`w-full flex items-center gap-4 p-4 border-2 rounded-xl transition-all ${
-                    paymentMethod === 'alipay'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="font-medium text-ocean-deep">支付宝</div>
-                    <div className="text-xs text-gray-500">扫码支付</div>
-                  </div>
-                  {paymentMethod === 'alipay' && (
-                    <CheckCircle className="w-5 h-5 text-blue-500" />
-                  )}
-                </button>
-
-                {/* 对公转账 */}
-                <button
-                  onClick={() => setPaymentMethod('bank_transfer')}
-                  className={`w-full flex items-center gap-4 p-4 border-2 rounded-xl transition-all ${
-                    paymentMethod === 'bank_transfer'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="font-medium text-ocean-deep">对公转账</div>
-                    <div className="text-xs text-gray-500">银行转账，审核确认</div>
-                  </div>
-                  {paymentMethod === 'bank_transfer' && (
-                    <CheckCircle className="w-5 h-5 text-orange-500" />
-                  )}
-                </button>
+                )}
+                {availableMethods.map((m) => {
+                  // 不同支付方式:图标/颜色/描述
+                  const config = {
+                    wechat: {
+                      icon: QrCode,
+                      bg: 'bg-green-500',
+                      active: 'border-green-500 bg-green-50',
+                      check: 'text-green-500',
+                      desc: '扫码支付',
+                    },
+                    alipay: {
+                      icon: CreditCard,
+                      bg: 'bg-blue-500',
+                      active: 'border-blue-500 bg-blue-50',
+                      check: 'text-blue-500',
+                      desc: '扫码支付',
+                    },
+                    bank_transfer: {
+                      icon: Building2,
+                      bg: 'bg-orange-500',
+                      active: 'border-orange-500 bg-orange-50',
+                      check: 'text-orange-500',
+                      desc: '银行转账，审核确认',
+                    },
+                  }[m.method];
+                  const Icon = config.icon;
+                  return (
+                    <button
+                      key={m.method}
+                      onClick={() => setPaymentMethod(m.method)}
+                      className={`w-full flex items-center gap-4 p-4 border-2 rounded-xl transition-all ${
+                        paymentMethod === m.method
+                          ? config.active
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 ${config.bg} rounded-lg flex items-center justify-center`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-ocean-deep">{m.name}</div>
+                        <div className="text-xs text-gray-500">{config.desc}</div>
+                      </div>
+                      {paymentMethod === m.method && (
+                        <CheckCircle className={`w-5 h-5 ${config.check}`} />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {error && (
@@ -377,7 +387,7 @@ const PaymentPage: React.FC = () => {
 
               <button
                 onClick={handleCreatePayment}
-                disabled={isLoading}
+                disabled={isLoading || availableMethods.length === 0}
                 className="w-full mt-6 py-4 bg-gradient-to-r from-ocean-blue to-ocean-cyan text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50"
               >
                 {isLoading ? (
