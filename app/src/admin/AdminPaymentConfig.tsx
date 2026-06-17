@@ -16,26 +16,26 @@ interface BankTransferInfo {
 
 interface AlipayInfo {
   enabled: boolean;
-  frontend_enabled: boolean;
-  app_id: string;
-  private_key: string;  // '已配置' / '未配置' (不返回真值)
-  public_key: string;
-  notify_url: string;
+  frontendEnabled: boolean;
+  appId: string;
+  privateKey: string;  // '已配置' / '未配置' (不返回真值)
+  publicKey: string;
+  notifyUrl: string;
 }
 
 interface WechatInfo {
   enabled: boolean;          // 后端 .env 真值(只读)
-  frontend_enabled: boolean; // 前端展示开关(可改)
-  mch_id: string;
-  app_id: string;
-  api_key: string;  // '已配置' / '未配置'
-  notify_url: string;
+  frontendEnabled: boolean;  // 前端展示开关(可改)
+  mchId: string;
+  appId: string;
+  apiKey: string;  // '已配置' / '未配置'
+  notifyUrl: string;
 }
 
 interface PaymentConfig {
-  wechat_pay: WechatInfo;
+  wechatPay: WechatInfo;
   alipay: AlipayInfo;
-  bank_transfer: BankTransferInfo;
+  bankTransfer: BankTransferInfo;
 }
 
 const AdminPaymentConfig: React.FC = () => {
@@ -59,8 +59,10 @@ const AdminPaymentConfig: React.FC = () => {
     try {
       const resp: any = await apiGet('/admin/payment-gateway');
       const data = resp?.data || resp;  // 兼容 ApiResponse 包装
+      // 重要:axios response interceptor 已经把整个 response.data snake→camel 转了
+      // 所以这里要读 camelCase 字段(bankTransfer / wechatPay / alipay 等)
       setConfig(data);
-      setBankForm(data.bank_transfer);
+      setBankForm(data.bankTransfer);
     } catch (e: any) {
       setError(e?.message || '加载支付配置失败');
     } finally {
@@ -74,8 +76,8 @@ const AdminPaymentConfig: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      // 注意:axios 请求拦截器会把 payload snake→camel 转成 request body
-      // 所以这里直接传 camelCase 即可,后端会收到 snake 字段名
+      // 注意:axios 请求拦截器会把 payload camel→snake 转给后端
+      // 所以这里直接传 camelCase 即可,后端 BankTransferConfig 会收到 snake 字段名
       await apiPut('/admin/payment-gateway/bank-transfer', {
         enabled: bankForm.frontendEnabled,
         accountName: bankForm.accountName,
@@ -98,7 +100,7 @@ const AdminPaymentConfig: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      await apiPut('/admin/payment-gateway/alipay-frontend-toggle', { frontend_enabled: next });
+      await apiPut('/admin/payment-gateway/alipay-frontend-toggle', { frontendEnabled: next });
       await loadConfig();
       setSaveMessage(next ? '支付宝前端展示已启用' : '支付宝前端展示已隐藏');
       setTimeout(() => setSaveMessage(''), 3000);
@@ -114,7 +116,7 @@ const AdminPaymentConfig: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      await apiPut('/admin/payment-gateway/wechat-frontend-toggle', { frontend_enabled: next });
+      await apiPut('/admin/payment-gateway/wechat-frontend-toggle', { frontendEnabled: next });
       await loadConfig();
       setSaveMessage(next ? '微信支付前端展示已启用' : '微信支付前端展示已隐藏');
       setTimeout(() => setSaveMessage(''), 3000);
@@ -216,15 +218,15 @@ const AdminPaymentConfig: React.FC = () => {
             </div>
             <div className="flex flex-col items-end gap-2">
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                config.wechat_pay.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                config.wechatPay.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               }`}>
-                后端(.env):{config.wechat_pay.enabled ? '✓ 已启用' : '✗ 未启用'}
+                后端(.env):{config.wechatPay.enabled ? '✓ 已启用' : '✗ 未启用'}
               </span>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.wechat_pay.frontend_enabled}
-                  disabled={!config.wechat_pay.enabled || saving}
+                  checked={config.wechatPay.frontendEnabled}
+                  disabled={!config.wechatPay.enabled || saving}
                   onChange={(e) => handleToggleWechatFrontend(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
                 />
@@ -233,7 +235,7 @@ const AdminPaymentConfig: React.FC = () => {
             </div>
           </div>
 
-          {!config.wechat_pay.enabled && (
+          {!config.wechatPay.enabled && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
               ⚠️ 后端 .env 中 <code className="bg-white px-1 rounded">WECHAT_ENABLED</code> 未启用。
               启用前无法在前端展示,即使勾选"前端展示"也无效果。
@@ -245,10 +247,10 @@ const AdminPaymentConfig: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <Field label="商户号 (mch_id)" value={config.wechat_pay.mch_id || '未配置'} />
-            <Field label="应用ID (app_id)" value={config.wechat_pay.app_id || '未配置'} />
-            <Field label="API 密钥" value={config.wechat_pay.api_key || '未配置'} />
-            <Field label="回调地址 (notify_url)" value={config.wechat_pay.notify_url || '未配置'} />
+            <Field label="商户号 (mch_id)" value={config.wechatPay.mchId || '未配置'} />
+            <Field label="应用ID (app_id)" value={config.wechatPay.appId || '未配置'} />
+            <Field label="API 密钥" value={config.wechatPay.apiKey || '未配置'} />
+            <Field label="回调地址 (notify_url)" value={config.wechatPay.notifyUrl || '未配置'} />
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
             💡 密钥等敏感信息仅存储在 <code className="bg-white px-1 rounded">server/.env</code>(不在数据库),此处仅显示是否已配置。
@@ -282,7 +284,7 @@ const AdminPaymentConfig: React.FC = () => {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.alipay.frontend_enabled}
+                  checked={config.alipay.frontendEnabled}
                   disabled={!config.alipay.enabled || saving}
                   onChange={(e) => handleToggleAlipayFrontend(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300 text-ocean-blue focus:ring-ocean-blue disabled:opacity-50"
@@ -304,10 +306,10 @@ const AdminPaymentConfig: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <Field label="应用ID (app_id)" value={config.alipay.app_id || '未配置'} />
-            <Field label="应用私钥" value={config.alipay.private_key || '未配置'} mono />
-            <Field label="支付宝公钥" value={config.alipay.public_key || '未配置'} mono />
-            <Field label="回调地址 (notify_url)" value={config.alipay.notify_url || '未配置'} />
+            <Field label="应用ID (app_id)" value={config.alipay.appId || '未配置'} />
+            <Field label="应用私钥" value={config.alipay.privateKey || '未配置'} mono />
+            <Field label="支付宝公钥" value={config.alipay.publicKey || '未配置'} mono />
+            <Field label="回调地址 (notify_url)" value={config.alipay.notifyUrl || '未配置'} />
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
             💡 密钥等敏感信息仅存储在 <code className="bg-white px-1 rounded">server/.env</code>(不在数据库)。
