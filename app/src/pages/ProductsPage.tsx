@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Search, Grid3X3, List, Eye, ChevronRight, Package } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DataStore } from '@/data/store';
 import type { Product } from '@/types';
 import ProductImage from '@/components/ProductImage';
@@ -13,6 +13,7 @@ gsap.registerPlugin(ScrollTrigger);
 const getMainImage = (p: Product) => p.coverImages?.[0] || p.image || '';
 
 const ProductsPage: React.FC = () => {
+  const navigate = useNavigate();
   const pageRef = useRef<HTMLDivElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -195,7 +196,17 @@ const ProductsPage: React.FC = () => {
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
-                className={`product-item group bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 ${
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/product/${product.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/product/${product.id}`);
+                  }
+                }}
+                aria-label={`查看 ${product.name} 详情`}
+                className={`product-item group bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 cursor-pointer ${
                   viewMode === 'grid' ? 'hover:-translate-y-2' : 'flex'
                 }`}
               >
@@ -212,18 +223,18 @@ const ProductsPage: React.FC = () => {
                     imgClassName="group-hover:scale-110 transition-transform duration-500"
                     sizeHint="thumb"
                   />
+                  {/* 渐变遮罩 - pointer-events-none,不挡 click */}
                   <div className="absolute inset-0 bg-gradient-to-t from-ocean-deep/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   {/* 
-                    查看详情 按钮:
-                    - 桌面端:hover 才显示(避免抢图)
-                    - 移动端:无 hover,默认显示(opacity-100)+ 触摸时缩小反馈
-                    关键 bug 修复:之前 opacity-0 group-hover:opacity-100 在手机/微信 WebView 
-                    没有 hover,所以按钮永远不可见,用户以为整张图不是按钮
+                    浮层"查看详情" 提示:
+                    - 移动端:无 hover,默认显(避免用户没线索)
+                    - 桌面端:hover 才显
+                    - pointer-events-none:只是视觉提示,不拦截 click,
+                      click 事件会冒泡到外层 .product-item 触发 navigate
                   */}
-                  <Link
-                    to={`/product/${product.id}`}
-                    aria-label={`查看 ${product.name} 详情`}
-                    className={`absolute inset-0 flex items-center justify-center bg-ocean-deep/30 sm:bg-ocean-deep/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity active:bg-ocean-deep/60 ${
+                  <div
+                    aria-hidden="true"
+                    className={`absolute inset-0 flex items-center justify-center bg-ocean-deep/30 sm:bg-ocean-deep/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pointer-events-none ${
                       viewMode === 'list' ? 'hidden' : ''
                     }`}
                   >
@@ -231,8 +242,8 @@ const ProductsPage: React.FC = () => {
                       <Eye className="w-4 h-4" />
                       查看详情
                     </span>
-                  </Link>
-                  <div className="absolute top-3 left-3">
+                  </div>
+                  <div className="absolute top-3 left-3 pointer-events-none">
                     <span className="px-2 py-1 bg-white/90 backdrop-blur-sm text-ocean-blue text-xs font-medium rounded-full">
                       {product.category}
                     </span>
@@ -274,13 +285,11 @@ const ProductsPage: React.FC = () => {
                     </div>
                   )}
 
-                  <Link
-                    to={`/product/${product.id}`}
-                    className="inline-flex items-center gap-1 text-ocean-blue text-sm font-medium group/link"
-                  >
+                  {/* 视觉提示"了解详情" - 纯 span,不再有独立 onClick(都走外层卡片 click) */}
+                  <span className="inline-flex items-center gap-1 text-ocean-blue text-sm font-medium group/link">
                     了解详情
                     <ChevronRight className="w-4 h-4 group-hover/link:translate-x-1 transition-transform" />
-                  </Link>
+                  </span>
                 </div>
               </div>
             ))}
