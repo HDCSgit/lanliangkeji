@@ -6,7 +6,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from app.core.config import settings
+from app.core.config import settings, APP_VERSION
 from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.db.migrations import apply_schema_patches
@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="福州蓝粮海洋生物科技有限公司 API",
     description="企业官网与电商交易系统后端",
-    version="1.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -97,6 +97,12 @@ app.include_router(storage.router, prefix="/api/v1/admin/storage", tags=["存储
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/version")
+def version():
+    """返回当前后端版本号(用于本地/线上对账)"""
+    return {"version": APP_VERSION}
 
 
 if __name__ == "__main__":

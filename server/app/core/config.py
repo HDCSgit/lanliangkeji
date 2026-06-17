@@ -2,6 +2,11 @@ from typing import List
 from pydantic_settings import BaseSettings
 
 
+# 应用版本号(本地与线上保持一致)
+# 修改时同步更新 app/package.json 的 "version" 字段
+APP_VERSION = "2026.6.17"
+
+
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://lanliang:lanliang123@localhost:5432/lanliang"
     SECRET_KEY: str = "change-me"
