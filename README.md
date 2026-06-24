@@ -2,6 +2,14 @@
 
 一套完整的企业官网 + 电商交易 + 管理后台解决方案。
 
+**线上地址**: https://www.lanliangkeji.cn
+
+---
+
+<p>
+  <code>React 19</code> · <code>TypeScript</code> · <code>Vite 7</code> · <code>Tailwind CSS 3</code> · <code>shadcn/ui</code> · <code>GSAP</code> · <code>FastAPI 0.115</code> · <code>Python 3.12</code> · <code>SQLAlchemy 2.0</code> · <code>SQLite</code>
+</p>
+
 ---
 
 ## 一、项目概述
@@ -16,8 +24,10 @@
 
 ### 1.2 访问地址
 
-- **线上地址**: https://rfyrgspfsg36a.ok.kimi.link
-- **管理后台**: https://rfyrgspfsg36a.ok.kimi.link/#/admin/login
+- **线上地址**: https://www.lanliangkeji.cn
+- **管理后台**: https://www.lanliangkeji.cn/#/admin/login
+
+> 如需管理后台账号信息,请联系开发者:18650356811
 
 ### 1.3 核心功能
 
@@ -96,11 +106,11 @@
 
 ### 3.2 登录账号
 
+> 管理后台账号信息(系统管理者 / 审核员)不对外公开,如需请联系开发者:**18650356811**
+
 | 角色 | 账号 | 密码 | 登录入口 |
 |------|------|------|----------|
-| 系统管理者 | `sysadmin` | `sysadmin123` | /admin/login |
-| 普通用户 | 手机号（注册） | 自设密码 | /login |
-| 测试用户 | `13800138000` | `testpass123` | /login |
+| 普通用户 | 手机号(注册) | 自设密码 | /login |
 
 ### 3.3 权限控制逻辑
 
@@ -130,7 +140,7 @@
 
 ### 3.4 审核员设置流程
 
-1. 系统管理者登录后台（sysadmin / sysadmin123）
+1. 系统管理者登录后台(账号信息请联系开发者)
 2. 进入「审核员管理」页面
 3. 在用户列表中搜索目标用户（支持按姓名/手机号查询）
 4. 点击「设为审核员」按钮
@@ -142,7 +152,9 @@
 
 ### 4.1 后台入口与登录
 
-访问 `/#/admin/login`，输入系统管理者账号 `sysadmin` / `sysadmin123` 或已授权的审核员账号登录。
+访问 `/#/admin/login`,使用系统管理者账号或已授权的审核员账号登录。
+
+> 账号信息请联系开发者:**18650356811**
 
 ### 4.2 仪表盘
 
@@ -264,6 +276,50 @@
 - 审核不通过后，72 小时重新计算
 - 超过 72 小时未提交/重新提交，订单自动取消
 
+### 5.4 订单付款邮件通知
+
+订单**付款成功后**，系统自动通过 QQ 邮箱 SMTP 给系统管理员发一封邮件通知，包含三个关键信息（订单号、收件人+手机号、收件地址），方便管理员第一时间安排发货。
+
+**邮件触发点**：`_mark_paid_and_settle` 函数（统一支付成功处理入口），支付宝回调、对公转账审核通过、人工标记支付成功 都会走到这里。
+
+**邮件内容预览**：
+
+| 字段 | 示例 |
+|------|------|
+| 订单号 | LL202606250001 |
+| 收件人 | 张三 |
+| 手机号 | 13800138000 |
+| 收件地址 | 福建省 厦门市 思明区 莲前西路 123 号 |
+| 支付方式 | 支付宝 |
+| 订单金额 | ¥299.00 |
+
+**配置方法**（在 `server/.env`）：
+
+```bash
+# QQ 邮箱 SMTP 配置
+SMTP_HOST=smtp.qq.com          # 推荐用 QQ 邮箱,其他邮箱改对应 SMTP 地址
+SMTP_PORT=465                  # 465 = SSL, 587 = STARTTLS
+SMTP_USER=your-sender@qq.com   # 发件邮箱
+SMTP_PASSWORD=授权码           # ⚠️ 不是登录密码,见下方
+SMTP_SENDER=蓝亮科技 <your-sender@qq.com>   # 显示的发件人,可留空用 SMTP_USER
+ADMIN_NOTIFY_EMAIL=1244716205@qq.com        # 收件邮箱(管理员)
+```
+
+**QQ 邮箱授权码生成步骤**：
+
+1. 登录 QQ 邮箱网页版 → **设置** → **账户**
+2. 找到 **POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务**
+3. 开启 **SMTP服务**（首次开启会要求短信验证）
+4. 点 **生成授权码** → 短信验证 → 复制 16 位授权码
+5. 粘贴到 `SMTP_PASSWORD`
+
+**容错设计**：
+- 任一 SMTP 字段缺失 → 静默跳过，**不影响支付主流程**
+- 发送失败（网络/授权码错误）→ 捕获异常记日志，**不影响支付主流程**
+- 邮件失败也不会回滚数据库事务
+
+**不发邮件的常见情况**：未配 `.env` 里的 SMTP_* 字段，或 `ADMIN_NOTIFY_EMAIL` 留空。控制台会输出 `[email_service] SMTP 配缺失,跳过订单 XXX 的邮件通知`。
+
 ---
 
 ## 六、手机端导航特性
@@ -343,4 +399,31 @@ npm run build
 ## 八、联系方式
 
 - **公司名称**: 福州蓝粮海洋生物科技有限公司
-- **技术支持**: 请联系项目管理员
+- **线上地址**: https://www.lanliangkeji.cn
+- **后管账号**: 如需管理后台账号信息(系统管理者/审核员),请联系开发者
+- **开发者联系方式**: **18650356811**
+
+---
+
+## 九、最近修复记录(2026-06-17)
+
+| 修复项 | 影响 |
+|--------|------|
+| **vite 锁版本到 `~7.2.4`** | 线上 Node 18.20.4 不支持 vite 7.3 要求的 `crypto.getRandomValues`,build 卡住导致 dist 缺 `index.html` 全站 403 |
+| **deploy.sh 自动降级 vite 7.3+** | build 前自检,发现 7.3+ 自动 `npm install vite@~7.2.4 --no-save` 强制降级,部署自我修复不依赖 lockfile |
+| **移除未使用的 `Eye` import** | 修 TS6133 编译错误导致 build 失败 |
+| **整张商品卡片都可点击进详情** | 之前只有"了解详情"小链接和 hover 才显的"查看详情"按钮能点,普通区域点不动 |
+| **产品中心"查看详情"按钮移动端默认显示** | 之前 `opacity-0 group-hover:opacity-100` 在无 hover 的手机端永远不可见,用户以为点不动 |
+| **产品更新保留 spec id(按 name upsert)** | 修产品编辑保存后下单 `spec_id` 失效导致加购失败 |
+| **修规格单价/运费 input 输不进小数的 bug** | 修后管编辑产品规格时小数点无法输入 |
+| **库存只在付款成功时扣减** | 之前创建订单就预扣库存,未付款订单会一直占用库存导致库存数据不准 |
+| **对公转账"前端展示"checkbox 改即时切换** | 跟支付宝/微信支付方式 toggle 行为保持一致(之前是表单一并保存) |
+| **后管新闻换 wangEditor 5 富文本** | 公众号风格排版,新闻编辑所见即所得 |
+| **修后管新闻编辑保存 + 封面上传 + 通用 upload 端点** | 修新闻编辑保存失败 + 修复封面图上传路径错误 |
+| **nginx 加 `/uploads/` 反代 + `^~` 锁 prefix** | 上传图片能正常通过 nginx 访问,避免被静态资源正则 location 抢匹配 |
+| **补 `/api/v1/site/pages` 公开列表端点** | 修首页/关于页等内容页拿不到公开数据 |
+| **ProductImage 首屏 priority 图优化** | 加 `fetchPriority="high"` + `decoding="sync"` + 不再 `opacity-0` 隐藏,避免首屏空白 |
+| **HTML 缓存改为 30 分钟** | `max-age=1800, must-revalidate` 替代 `no-store`,降压且 30 分钟内全网更新 |
+| **deploy.sh 强装 devDeps** | `NODE_ENV=development` + `npm ci --include=dev`,tsc/vite 在 devDependencies 里 build 需要 |
+| **登录页去掉测试账号提示(`13800138000`)** | 防止测试账号外泄到生产页面 |
+| **订单付款邮件通知(QQ 邮箱 SMTP)** | 付款成功后自动发邮件给系统管理员(1244716205@qq.com),包含订单号/收件人/手机号/收件地址 + 支付方式/金额,SMTP 用标准库 smtplib 配 SSL 465,失败不阻塞支付主流程 |

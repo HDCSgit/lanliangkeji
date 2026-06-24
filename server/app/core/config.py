@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     # 对公转账开关(默认 true,审核员可在后台配置账户)
     BANK_TRANSFER_ENABLED: bool = True
 
+    # 订单付款通知邮件(SMTP) —— 支付成功后自动发邮件给系统管理员
+    # 配齐后才会发送,任一字段缺失就静默跳过(不阻塞支付主流程)
+    # 推荐用 QQ 邮箱: SMTP_HOST=smtp.qq.com SMTP_PORT=465
+    # SMTP_PASSWORD 是 QQ 邮箱网页端"设置 → 账户"生成的授权码(不是登录密码)
+    SMTP_HOST: str = ""             # 例:smtp.qq.com
+    SMTP_PORT: int = 465            # 465 = SSL, 587 = STARTTLS
+    SMTP_USER: str = ""             # 发件邮箱(完整地址,如 123456@qq.com)
+    SMTP_PASSWORD: str = ""         # 授权码
+    SMTP_SENDER: str = ""           # 显示的发件人(可填店铺名,如 "蓝亮科技 <notice@qq.com>";留空用 SMTP_USER)
+    ADMIN_NOTIFY_EMAIL: str = ""    # 系统管理员收件邮箱(如 1244716205@qq.com)
+
     SYSADMIN_PHONE: str = "sysadmin"
     SYSADMIN_PASSWORD: str = "sysadmin123"
     SYSADMIN_NAME: str = "系统管理者"

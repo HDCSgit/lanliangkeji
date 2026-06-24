@@ -27,6 +27,7 @@ from app.services.alipay_service import (
     trade_status_paid,
     verify_notify_sign,
 )
+from app.services.email_service import send_order_paid_notification
 from app.services.storage_service import get_express_config
 from app.utils.generators import generate_payment_no
 
@@ -207,6 +208,30 @@ def _mark_paid_and_settle(db: Session, payment: PaymentOrder) -> None:
     )
     db.add(bill)
     db.commit()
+
+    # 4. 发邮件通知系统管理员(失败不影响支付主流程)
+    #    shipping_address 是 JSON,含 name/phone/province/city/district/detail
+    addr = order.shipping_address or {}
+    receiver_name = addr.get("name") or addr.get("receiver_name") or "未知"
+    receiver_phone = addr.get("phone") or addr.get("receiver_phone") or "未知"
+    address_parts = [
+        addr.get("province", ""),
+        addr.get("city", ""),
+        addr.get("district", ""),
+        addr.get("detail", ""),
+    ]
+    receiver_address = " ".join([p for p in address_parts if p]) or "未知"
+    payment_method_label = (
+        payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method)
+    )
+    send_order_paid_notification(
+        order_no=order.order_no,
+        receiver_name=receiver_name,
+        receiver_phone=receiver_phone,
+        receiver_address=receiver_address,
+        payment_method=payment_method_label,
+        amount=payment.amount,
+    )
 
 
 @router.post("/alipay/notify", include_in_schema=True)
