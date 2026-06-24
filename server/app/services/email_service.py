@@ -15,6 +15,7 @@ import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.policy import EmailPolicy
 from typing import Optional
 
 from app.core.config import settings
@@ -97,7 +98,7 @@ def _build_order_paid_email(
     </div>
     """
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("alternative", policy=EmailPolicy(utf8=True, max_line_length=None))
     msg["Subject"] = subject
     msg.attach(MIMEText(plain_text, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
@@ -147,19 +148,22 @@ def send_order_paid_notification(
     msg["To"] = recipient
 
     # 3. 发送(QQ 邮箱用 SSL 465;其他用 STARTTLS 587)
+    #    ⚠️ 必须用 send_message() 而不是 sendmail()!
+    #    sendmail() 内部硬编码 msg.encode('ascii'),遇到中文 header 必崩
+    #    send_message() 会识别 utf-8 policy,正确处理中文/emoji
     try:
         if smtp_port == 465:
             # SSL 直连
             context = ssl.create_default_context()
             with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
                 server.login(smtp_user, smtp_password)
-                server.sendmail(sender, [recipient], msg.as_string())
+                server.send_message(msg)
         else:
             # STARTTLS(587 等)
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                 server.starttls(context=ssl.create_default_context())
                 server.login(smtp_user, smtp_password)
-                server.sendmail(sender, [recipient], msg.as_string())
+                server.send_message(msg)
 
         print(f"[email_service] 订单 {order_no} 通知邮件已发送至 {recipient}")
         return True
